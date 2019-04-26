@@ -58,6 +58,14 @@ class Board:
         self.n_cols = n_cols
         self.board = [Pos.Empty for _ in range(n_rows * n_cols)]
         self.liberties = [0 for _ in range(n_rows * n_cols)]
+        self.board_history = []
+
+    def copy(self):
+        b = Board(self.n_rows, self.n_cols)
+        b.board = self.board[:]
+        b.liberties = self.liberties[:]
+        b.board_history = self.board_history[:]
+        return b
 
     def pos_index(self, point):
         r, c = point
@@ -89,8 +97,11 @@ class Board:
             raise ValueError(f'Invalid move, {pos} is not empty')
         self[point] = pos
         self.update_liberties(point)
+        for neighboring_points in point.neighbors:
+            self.update_liberties(neighboring_points)
         self.remove_stones_without_liberties_of_color(pos.other)
         self.remove_stones_without_liberties_of_color(pos)
+        self.board_history.append(self.state)
 
     def remove_stones_without_liberties_of_color(self, pos):
         points_removed = set()
@@ -141,26 +152,35 @@ class Board:
         for group_point in group:
             self.set_liberties(group_point, len(liberties))
 
-    @property
-    def valid_moves(self):
-        valid_moves = []
+    def valid_moves(self, pos):
+        valid_moves = set()
         for r in range(self.n_rows):
             for c in range(self.n_cols):
                 p = P(r, c)
-                if self.is_valid_move(p):
-                    valid_moves.append(p)
+                if self.can_place_stone_at(p, pos) and self.not_ko(p, pos):
+                    valid_moves.add(p)
         return valid_moves
 
-    def is_valid_move(self, point):
+    def can_place_stone_at(self, point, pos):
         point = self.ensure_point(point)
+        if self[point] != Pos.Empty:
+            return False
         for neighboring_point in point.neighbors:
             if not self.on_board(neighboring_point):
                 continue
             if self[neighboring_point] == Pos.Empty:
                 return True
-            if self[neighboring_point] == self[point] and self.get_liberties(neighboring_point) > 1:
+            if self[neighboring_point] == pos and self.get_liberties(neighboring_point) > 1:
+                return True
+            if self[neighboring_point] == pos.other and self.get_liberties(neighboring_point) == 1:
                 return True
         return False
+
+    def not_ko(self, point, pos):
+        point = self.ensure_point(point)
+        b = self.copy()
+        b.move(point, pos)
+        return b.state not in self.board_history
 
     @property
     def state(self):
