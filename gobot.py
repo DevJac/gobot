@@ -1,3 +1,4 @@
+from collections import namedtuple
 import enum
 
 
@@ -28,27 +29,45 @@ class Position(enum.Enum):
 Pos = Position
 
 
+class Point(namedtuple('Point', 'row col')):
+    @property
+    def neighbors(self):
+        return [
+            Point(self.row - 1, self.col),
+            Point(self.row + 1, self.col),
+            Point(self.row, self.col - 1),
+            Point(self.row, self.col + 1),
+        ]
+
+
+P = Point
+
+
 class Board:
-    def __init__(self, n_cols=19, n_rows=19):
-        self.n_cols = 19
-        self.n_rows = 19
+    def __init__(self, n_rows=19, n_cols=19):
+        self.n_rows = n_rows
+        self.n_cols = n_cols
         self.board = [Pos.Empty for _ in range(n_rows * n_cols)]
 
     def __getitem__(self, item):
-        x, y = item
-        if x >= self.n_cols or y >= self.n_rows:
-            raise ValueError(f"Board is {self.n_cols} x {self.n_rows}: {item} is an invalid coordinate")
-        pos_index = x + y * x
+        r, c = item
+        if r >= self.n_rows or c >= self.n_cols:
+            raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {item} is an invalid coordinate')
+        pos_index = c + r * self.n_cols
         return self.board[pos_index]
 
     def __setitem__(self, item, value):
-        x, y = item
-        if x >= self.n_cols or y >= self.n_rows:
-            raise ValueError(f"Board is {self.n_cols} x {self.n_rows}: {item} is an invalid coordinate")
         if type(value) is not Position:
             raise ValueError(f"Expected a Position value, but got {value}")
-        pos_index = x + y * x
+        r, c = item
+        if r >= self.n_rows or c >= self.n_cols:
+            raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {item} is an invalid coordinate')
+        pos_index = c + r * self.n_cols
         self.board[pos_index] = value
+
+    @property
+    def valid_moves(self):
+        pass
 
     @property
     def state(self):
