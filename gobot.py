@@ -63,12 +63,20 @@ class Board:
         r, c = point
         return c + r * self.n_cols
 
+    @staticmethod
+    def ensure_point(o):
+        if type(o) != Point:
+            return Point(*o)
+        return o
+
     def __getitem__(self, point):
+        point = self.ensure_point(point)
         if not self.on_board(point):
             raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {point} is an invalid coordinate')
         return self.board[self.pos_index(point)]
 
     def __setitem__(self, point, pos):
+        point = self.ensure_point(point)
         if type(pos) is not Position:
             raise ValueError(f"Expected a Position value, but got {pos}")
         if not self.on_board(point):
@@ -76,6 +84,7 @@ class Board:
         self.board[self.pos_index(point)] = pos
 
     def move(self, point, pos):
+        point = self.ensure_point(point)
         if self[point] != Pos.Empty:
             raise ValueError(f'Invalid move, {pos} is not empty')
         self[point] = pos
@@ -93,11 +102,15 @@ class Board:
                     points_removed.add(p)
         for point_removed in points_removed:
             self.update_liberties(point_removed)
+            for neighboring_point in point_removed.neighbors:
+                self.update_liberties(neighboring_point)
 
     def get_liberties(self, point):
+        point = self.ensure_point(point)
         return self.liberties[self.pos_index(point)]
 
     def set_liberties(self, point, liberties):
+        point = self.ensure_point(point)
         self.liberties[self.pos_index(point)] = liberties
 
     def on_board(self, point):
@@ -105,6 +118,9 @@ class Board:
         return 0 <= r < self.n_rows and 0 <= c < self.n_cols
 
     def update_liberties(self, point):
+        if not self.on_board(point):
+            return
+        point = self.ensure_point(point)
         if self[point] == Pos.Empty:
             self.set_liberties(point, 0)
             return
@@ -133,13 +149,22 @@ class Board:
     def state(self):
         return b''.join(p.char for p in self.board)
 
+    star_points = {
+        (19, 19): {(3,  3), (3,  9), (3,  15),
+                   (9,  3), (9,  9), (9,  15),
+                   (15, 3), (15, 9), (15, 15)}
+    }
+
     @property
     def printable_board(self):
         out = b''
         for r in range(self.n_rows):
             out += b'|'
             for c in range(self.n_cols):
-               out += self[P(r, c)].char
+                if (r, c) in self.star_points.get((self.n_rows, self.n_cols), set()):
+                    out += b'-' + self[r, c].char
+                else:
+                    out += b' ' + self[r, c].char
             out += b'|\n'
         return out.decode('utf8')
 
@@ -149,7 +174,10 @@ class Board:
         for r in range(self.n_rows):
             out += '|'
             for c in range(self.n_cols):
-                out += '{:2}'.format(self.get_liberties(P(r, c)))
+                if (r, c) in self.star_points.get((self.n_rows, self.n_cols), set()):
+                    out += ' {:02}'.format(self.get_liberties((r, c)))
+                else:
+                    out += '{:3}'.format(self.get_liberties((r, c)))
             out += '|\n'
         return out
 
