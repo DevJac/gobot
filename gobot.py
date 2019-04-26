@@ -118,9 +118,9 @@ class Board:
         return 0 <= r < self.n_rows and 0 <= c < self.n_cols
 
     def update_liberties(self, point):
+        point = self.ensure_point(point)
         if not self.on_board(point):
             return
-        point = self.ensure_point(point)
         if self[point] == Pos.Empty:
             self.set_liberties(point, 0)
             return
@@ -143,7 +143,24 @@ class Board:
 
     @property
     def valid_moves(self):
-        pass
+        valid_moves = []
+        for r in range(self.n_rows):
+            for c in range(self.n_cols):
+                p = P(r, c)
+                if self.is_valid_move(p):
+                    valid_moves.append(p)
+        return valid_moves
+
+    def is_valid_move(self, point):
+        point = self.ensure_point(point)
+        for neighboring_point in point.neighbors:
+            if not self.on_board(neighboring_point):
+                continue
+            if self[neighboring_point] == Pos.Empty:
+                return True
+            if self[neighboring_point] == self[point] and self.get_liberties(neighboring_point) > 1:
+                return True
+        return False
 
     @property
     def state(self):
