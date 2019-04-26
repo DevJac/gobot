@@ -6,6 +6,24 @@ class Position(enum.Enum):
     Black = enum.auto()
     White = enum.auto()
 
+    @property
+    def char(self):
+        if self == self.Empty:
+            return b' '
+        if self == self.Black:
+            return b'b'
+        if self == self.White:
+            return b'w'
+
+    @classmethod
+    def from_char(cls, char):
+        if char == b' ':
+            return cls.Empty
+        if char == b'b':
+            return cls.Black
+        if char == b'w':
+            return cls.White
+
 
 Pos = Position
 
@@ -31,3 +49,7 @@ class Board:
             raise ValueError(f"Expected a Position value, but got {value}")
         pos_index = x + y * x
         self.board[pos_index] = value
+
+    @property
+    def state(self):
+        return b''.join(p.char for p in self.board)
