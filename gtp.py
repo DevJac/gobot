@@ -115,9 +115,9 @@ def main():
     command_re = re.compile(r'(?P<id>[0-9]+)? ?(?P<command_name>\w+) ?(?P<args>.*)')
     game = Game()
     for line in sys.stdin:
-        log('Received command:' + repr(line))
+        command = re.match(command_re, line)
+        log(f'Parsed {command.groups()} from {repr(line)}')
         try:
-            command = re.match(command_re, line)
             response = getattr(game, 'command_' + command.group('command_name'))(command.group('args'))
             response = response or ''
             response = f"={command.group('id') or ''} {response}\n\n"
@@ -127,11 +127,6 @@ def main():
                 return
         except Exception:
             log(f'Failed on command: {repr(line)}')
-            try:
-                log(f'Parsed command as: {command.groups()}')
-            except Exception:
-                log("Couldn't parse command")
-                pass
             log(traceback.format_exc())
             raise
 
