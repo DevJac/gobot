@@ -23,8 +23,7 @@ def test_move_and_capture():
     assert b.get_liberties((0, 0)) == 0
     assert b.get_liberties((1, 0)) == 5
     assert b.get_liberties((1, 1)) == 5
-    print(b.printable_liberties)
-    print(b)
+
 
 def test_superko():
     b = Board(9, 9)
@@ -48,3 +47,10 @@ def test_superko():
     assert b[1, 2] == Empty
     assert P(1, 2) not in b.valid_moves(B)
     assert P(1, 2) in b.valid_moves(W)
+
+
+def test_cant_play_on_own_stones():
+    b = Board(9, 9)
+    b.move((0, 0), B)
+    assert P(0, 0) not in b.valid_moves(B)
+    assert P(0, 0) not in b.valid_moves(W)

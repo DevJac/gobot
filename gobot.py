@@ -195,7 +195,7 @@ class Board:
     @property
     def printable_board(self):
         out = b''
-        for r in range(self.n_rows):
+        for r in reversed(range(self.n_rows)):
             out += b'|'
             for c in range(self.n_cols):
                 if (r, c) in self.star_points.get((self.n_rows, self.n_cols), set()):
@@ -208,7 +208,7 @@ class Board:
     @property
     def printable_liberties(self):
         out = ''
-        for r in range(self.n_rows):
+        for r in reversed(range(self.n_rows)):
             out += '|'
             for c in range(self.n_cols):
                 if (r, c) in self.star_points.get((self.n_rows, self.n_cols), set()):
