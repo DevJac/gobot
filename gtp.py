@@ -6,11 +6,11 @@ from gobot import Board, P, Pos
 
 
 def letter_to_int(letter):
-    return ord(letter) - 64
+    return ord(letter) - 64 if letter < 'I' else ord(letter) - 65
 
 
 def int_to_letter(int):
-    return chr(int + 64)
+    return chr(int + 64) if int < (ord('I') - 64) else chr(int + 65)
 
 
 def gtp_vertex_to_point(v):

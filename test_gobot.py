@@ -1,4 +1,5 @@
 from gobot import Pos, Board, P
+from gtp import letter_to_int, int_to_letter
 
 
 Empty = Pos.Empty
@@ -54,3 +55,15 @@ def test_cant_play_on_own_stones():
     b.move((0, 0), B)
     assert P(0, 0) not in b.valid_moves(B)
     assert P(0, 0) not in b.valid_moves(W)
+
+
+def test_letter_conversion():
+    conversions = [
+        ('A', 1),
+        ('H', 8),
+        ('J', 9),
+        ('Z', 25),
+    ]
+    for l, i in conversions:
+        assert letter_to_int(l) == i
+        assert int_to_letter(i) == l
