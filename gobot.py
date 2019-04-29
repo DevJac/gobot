@@ -195,6 +195,9 @@ class Board:
 
     def not_ko(self, point, pos):
         point = self.ensure_point(point)
+        if all(not self.on_board(neighboring_point) or self.get_liberties(neighboring_point) != 1
+               for neighboring_point in point.neighbors):
+            return True
         b = self.copy()
         b.move(point, pos)
         return b.state not in self.board_history
