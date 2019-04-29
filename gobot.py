@@ -1,4 +1,5 @@
 import enum
+import functools
 import random
 from collections import namedtuple
 
@@ -42,15 +43,20 @@ class Position(enum.Enum):
 Pos = Position
 
 
+@functools.lru_cache(maxsize=1000)
+def neighbors(point):
+    return {
+        Point(point.row - 1, point.col),
+        Point(point.row + 1, point.col),
+        Point(point.row, point.col - 1),
+        Point(point.row, point.col + 1),
+    }
+
+
 class Point(namedtuple('Point', 'row col')):
     @property
     def neighbors(self):
-        return {
-            Point(self.row - 1, self.col),
-            Point(self.row + 1, self.col),
-            Point(self.row, self.col - 1),
-            Point(self.row, self.col + 1),
-        }
+        return neighbors(self)
 
 
 P = Point
