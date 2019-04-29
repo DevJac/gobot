@@ -35,6 +35,7 @@ class Position(enum.Enum):
             return cls.Black
         if char == b'w':
             return cls.White
+        raise ValueError(f'Unknown Position value: {repr(char)}')
 
 
 Pos = Position
@@ -62,12 +63,12 @@ class Board:
         self.liberties = [0 for _ in range(n_rows * n_cols)]
         self.board_history = []
 
-    def load_board_state_string(self, s):
+    @classmethod
+    def from_state_string(cls, s, n_rows=19, n_cols=19):
+        b = cls(n_rows, n_cols)
         for i, c in enumerate(s):
-            c = c.encode('utf8')
-            self.board[i] = Pos.from_char(c)
-        self.liberties = [0 for _ in range(self.n_rows * self.n_cols)]
-        self.board_history = []
+            b.board[i] = Pos.from_char(c)
+        return b
 
     def copy(self):
         b = Board(self.n_rows, self.n_cols)
@@ -82,42 +83,50 @@ class Board:
 
     @staticmethod
     def ensure_point(o):
-        if type(o) != Point:
+        if type(o) is not Point:
             return Point(*o)
+        return o
+
+    @staticmethod
+    def ensure_pos(o):
+        if type(o) is not Pos:
+            return Pos.from_char(o)
         return o
 
     def __getitem__(self, point):
         point = self.ensure_point(point)
         if not self.on_board(point):
-            raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {point} is an invalid coordinate')
+            raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {repr(point)} is an invalid coordinate')
         return self.board[self.pos_index(point)]
 
     def __setitem__(self, point, pos):
         point = self.ensure_point(point)
+        pos = self.ensure_pos(pos)
         if type(pos) is not Position:
             raise ValueError(f"Expected a Position value, but got {pos}")
         if not self.on_board(point):
-            raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {point} is an invalid coordinate')
+            raise ValueError(f'Board is {self.n_rows} x {self.n_cols}: {repr(point)} is an invalid coordinate')
         self.board[self.pos_index(point)] = pos
 
     def move(self, point, pos):
         point = self.ensure_point(point)
+        pos = self.ensure_pos(pos)
         if self[point] != Pos.Empty:
-            raise ValueError(f'Invalid move, {pos} is not empty')
+            raise ValueError(f'Invalid move, {repr(pos)} is not empty')
         self[point] = pos
         self.update_liberties(point)
         for neighboring_points in point.neighbors:
             self.update_liberties(neighboring_points)
-        self.remove_stones_without_liberties_of_color(pos.other)
-        self.remove_stones_without_liberties_of_color(pos)
+        self.remove_stones_without_liberties(pos.other)
+        self.remove_stones_without_liberties(pos)
         self.board_history.append(self.state)
 
-    def remove_stones_without_liberties_of_color(self, pos):
+    def remove_stones_without_liberties(self, remove_color):
         points_removed = set()
         for r in range(self.n_rows):
             for c in range(self.n_cols):
                 p = P(r, c)
-                if self[p] == pos and self.get_liberties(p) == 0:
+                if self[p] == remove_color and self.get_liberties(p) == 0:
                     self[p] = Pos.Empty
                     points_removed.add(p)
         for point_removed in points_removed:
@@ -138,6 +147,7 @@ class Board:
         return 0 <= r < self.n_rows and 0 <= c < self.n_cols
 
     def update_liberties(self, point):
+        # TODO: Optimize. More than 90% of the time is spent in this function.
         point = self.ensure_point(point)
         if not self.on_board(point):
             return
