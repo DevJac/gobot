@@ -114,9 +114,7 @@ class Board:
         if self[point] != Pos.Empty:
             raise ValueError(f'Invalid move, {repr(pos)} is not empty')
         self[point] = pos
-        self.update_liberties(point)
-        for neighboring_points in point.neighbors:
-            self.update_liberties(neighboring_points)
+        self.update_liberties({point} | point.neighbors)
         self.remove_stones_without_liberties(pos.other)
         self.remove_stones_without_liberties(pos)
         self.board_history.append(self.state)
@@ -129,10 +127,8 @@ class Board:
                 if self[p] == remove_color and self.get_liberties(p) == 0:
                     self[p] = Pos.Empty
                     points_removed.add(p)
-        for point_removed in points_removed:
-            self.update_liberties(point_removed)
-            for neighboring_point in point_removed.neighbors:
-                self.update_liberties(neighboring_point)
+        points_removed_plus_neighbors = points_removed | {n for p in points_removed for n in p.neighbors}
+        self.update_liberties(points_removed_plus_neighbors)
 
     def get_liberties(self, point):
         point = self.ensure_point(point)
@@ -146,30 +142,32 @@ class Board:
         r, c = point
         return 0 <= r < self.n_rows and 0 <= c < self.n_cols
 
-    def update_liberties(self, point):
-        # TODO: Optimize. More than 90% of the time is spent in this function.
-        point = self.ensure_point(point)
-        if not self.on_board(point):
-            return
-        if self[point] == Pos.Empty:
-            self.set_liberties(point, 0)
-            return
-        group = {point}
-        liberties = set()
+    def update_liberties(self, points):
+        updated_liberties = [-1 for _ in range(len(self.liberties))]
+        for point in points:
+            if not self.on_board(point):
+                continue
+            if updated_liberties[self.pos_index(point)] != -1:
+                continue
+            group = {point}
+            group_liberties = set()
 
-        def recurse(this_point):
-            for neighboring_point in this_point.neighbors:
-                if not self.on_board(neighboring_point):
-                    continue
-                if self[neighboring_point] == Pos.Empty:
-                    liberties.add(neighboring_point)
-                elif self[this_point] == self[neighboring_point] and neighboring_point not in group:
-                    group.add(neighboring_point)
-                    recurse(neighboring_point)
+            def recurse(this_point):
+                for neighboring_point in this_point.neighbors:
+                    if not self.on_board(neighboring_point):
+                        continue
+                    if self[neighboring_point] == Pos.Empty:
+                        group_liberties.add(neighboring_point)
+                    elif self[this_point] == self[neighboring_point] and neighboring_point not in group:
+                        group.add(neighboring_point)
+                        recurse(neighboring_point)
 
-        recurse(point)
-        for group_point in group:
-            self.set_liberties(group_point, len(liberties))
+            recurse(point)
+            for group_point in group:
+                updated_liberties[self.pos_index(group_point)] = len(group_liberties)
+        for i in range(len(self.liberties)):
+            if updated_liberties[i] > -1:
+                self.liberties[i] = updated_liberties[i]
 
     def valid_moves(self, pos):
         valid_moves = set()

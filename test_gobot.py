@@ -36,7 +36,7 @@ def test_superko():
     b[2, 2] = W
     for r in range(9):
         for c in range(9):
-            b.update_liberties((r, c))
+            b.update_liberties([P(r, c)])
     print(b)
     b.move((1, 2), B)
     print(b)
