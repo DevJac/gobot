@@ -1,4 +1,4 @@
-from gobot import Pos, Board, P
+from gobot import Board, P, Pos
 from gtp import letter_to_int, int_to_letter
 
 
@@ -67,3 +67,10 @@ def test_letter_conversion():
     for l, i in conversions:
         assert letter_to_int(l) == i
         assert int_to_letter(i) == l
+
+
+def test_position_from_char():
+    assert Pos.from_char('w') == Pos.White
+    assert Pos.from_char('b') == Pos.Black
+    assert Pos.from_char(b'w') == Pos.White
+    assert Pos.from_char(b'b') == Pos.Black

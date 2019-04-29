@@ -27,6 +27,8 @@ class Position(enum.Enum):
 
     @classmethod
     def from_char(cls, char):
+        if type(char) is str:
+            char = char.encode('utf8')
         if char == b' ':
             return cls.Empty
         if char == b'b':
