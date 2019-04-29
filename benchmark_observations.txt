@@ -2,3 +2,4 @@ Commit 578bd66 - 8.310 s ±  0.706 s
 Commit e845e2c - 21.421 s ±  1.160 s
 Commit f499de9 - 24.849 s ±  1.359 s
 Commit 11a3dc1 - 21.611 s ±  1.565 s
+Commit c85e266 - 17.415 s ±  1.040 s
