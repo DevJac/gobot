@@ -183,17 +183,18 @@ class Board:
         return valid_moves
 
     def can_place_stone_at(self, point, pos):
-        point = self.ensure_point(point)
         if self[point] != Pos.Empty:
             return False
         for neighboring_point in point.neighbors:
             if self.off_board(neighboring_point):
                 continue
-            if self[neighboring_point] == Pos.Empty:
+            neighboring_position = self[neighboring_point]
+            if neighboring_position == Pos.Empty:
                 return True
-            if self[neighboring_point] == pos and self.get_liberties(neighboring_point) > 1:
+            neighboring_liberties = self.get_liberties(neighboring_point)
+            if neighboring_position == pos and neighboring_liberties > 1:
                 return True
-            if self[neighboring_point] == pos.other and self.get_liberties(neighboring_point) == 1:
+            if neighboring_position == pos.other and neighboring_liberties == 1:
                 return True
         return False
 
