@@ -1,5 +1,5 @@
 from gobot import Board, P, Pos
-from gtp import letter_to_int, int_to_letter
+from gtp import Game, letter_to_int, int_to_letter
 
 
 Empty = Pos.Empty
@@ -74,3 +74,10 @@ def test_position_from_char():
     assert Pos.from_char('b') == Pos.Black
     assert Pos.from_char(b'w') == Pos.White
     assert Pos.from_char(b'b') == Pos.Black
+
+
+def test_genmove():
+    g = Game()
+    g.command_boardsize(19)
+    g.command_clear_board('')
+    g.command_genmove('B')

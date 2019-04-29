@@ -1,5 +1,6 @@
-from collections import namedtuple
 import enum
+import random
+from collections import namedtuple
 
 
 class Position(enum.Enum):
@@ -142,10 +143,13 @@ class Board:
         r, c = point
         return 0 <= r < self.n_rows and 0 <= c < self.n_cols
 
+    def off_board(self, point):
+        return not self.on_board(point)
+
     def update_liberties(self, points):
         updated_liberties = [-1 for _ in range(len(self.liberties))]
         for point in points:
-            if not self.on_board(point):
+            if self.off_board(point):
                 continue
             if updated_liberties[self.pos_index(point)] != -1:
                 continue
@@ -154,7 +158,7 @@ class Board:
 
             def recurse(this_point):
                 for neighboring_point in this_point.neighbors:
-                    if not self.on_board(neighboring_point):
+                    if self.off_board(neighboring_point):
                         continue
                     if self[neighboring_point] == Pos.Empty:
                         group_liberties.add(neighboring_point)
@@ -183,7 +187,7 @@ class Board:
         if self[point] != Pos.Empty:
             return False
         for neighboring_point in point.neighbors:
-            if not self.on_board(neighboring_point):
+            if self.off_board(neighboring_point):
                 continue
             if self[neighboring_point] == Pos.Empty:
                 return True
@@ -195,7 +199,7 @@ class Board:
 
     def not_ko(self, point, pos):
         point = self.ensure_point(point)
-        if all(not self.on_board(neighboring_point) or self.get_liberties(neighboring_point) != 1
+        if all(self.off_board(neighboring_point) or self.get_liberties(neighboring_point) != 1
                for neighboring_point in point.neighbors):
             return True
         b = self.copy()
@@ -240,3 +244,19 @@ class Board:
 
     def __str__(self):
         return self.printable_board
+
+    def is_eye(self, point, pos):
+        return all(self.off_board(neighboring_point) or
+                   (self[neighboring_point] == pos and self.get_liberties(neighboring_point) > 1)
+                   for neighboring_point in point.neighbors)
+
+    def random_move(self, pos):
+        pos = self.ensure_pos(pos)
+        valid_moves = self.valid_moves(pos)
+        valid_moves_that_keep_eyes = []
+        for valid_move in valid_moves:
+            if not self.is_eye(valid_move, pos):
+                valid_moves_that_keep_eyes.append(valid_move)
+        if not valid_moves_that_keep_eyes:
+            return None
+        return random.choice(valid_moves_that_keep_eyes)

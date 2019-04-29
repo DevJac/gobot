@@ -77,17 +77,17 @@ class Game:
 
     def command_play(self, args):
         color, _, vertex = args.partition(' ')
-        self.board.move(gtp_vertex_to_point(vertex), color_to_pos(color))
+        if vertex != 'pass':
+            self.board.move(gtp_vertex_to_point(vertex), color_to_pos(color))
         log('Board state:\n' + self.board.printable_board + '\n' + self.board.printable_liberties)
 
     def command_genmove(self, color):
-        valid_moves = self.board.valid_moves(color_to_pos(color))
-        if len(valid_moves) == 0:
-            return 'resign'
-        selected_move = random.choice(list(valid_moves))
-        self.board.move(selected_move, color_to_pos(color))
+        move = self.board.random_move(color_to_pos(color))
+        if not move:
+            return 'pass'
+        self.board.move(move, color_to_pos(color))
         log('Board state:\n' + self.board.printable_board + '\n' + self.board.printable_liberties)
-        return point_to_gtp_vertex(selected_move)
+        return point_to_gtp_vertex(move)
 
 
 logging = True
