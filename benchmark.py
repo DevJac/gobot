@@ -1,20 +1,14 @@
-import random
-from itertools import count
 from gobot import Board, Pos
 
 
-board = Board()
+def bench_valid_moves():
+    board = Board()
+    for board_string in open('benchmark_board.txt'):
+        board_string = board_string.strip()
+        board.load_board_state_string(board_string)
+        board.valid_moves(Pos.Black)
+        board.valid_moves(Pos.White)
 
-for move in count(1):
-    print('{:,}'.format(move))
-    valid_moves = board.valid_moves(Pos.Black)
-    if not valid_moves:
-        print('White Wins!')
-        break
-    board.move(random.choice(list(valid_moves)), Pos.Black)
 
-    valid_moves = board.valid_moves(Pos.White)
-    if not valid_moves:
-        print('Black Wins!')
-        break
-    board.move(random.choice(list(valid_moves)), Pos.White)
+if __name__ == '__main__':
+    bench_valid_moves()

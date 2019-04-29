@@ -60,6 +60,13 @@ class Board:
         self.liberties = [0 for _ in range(n_rows * n_cols)]
         self.board_history = []
 
+    def load_board_state_string(self, s):
+        for i, c in enumerate(s):
+            c = c.encode('utf8')
+            self.board[i] = Pos.from_char(c)
+        self.liberties = [0 for _ in range(self.n_rows * self.n_cols)]
+        self.board_history = []
+
     def copy(self):
         b = Board(self.n_rows, self.n_cols)
         b.board = self.board[:]
