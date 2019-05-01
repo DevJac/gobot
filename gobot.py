@@ -378,7 +378,7 @@ class NNBot:
         Y0 = Y0.reshape(Y0.shape[0], self.board_size[0] * self.board_size[1])
         Y1 = np.array([y[1] for y in self.Y])
         print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
-        self.model.fit(np.array(X), [Y0, Y1], batch_size=200, epochs=20)
+        self.model.fit(np.array(X), [Y0, Y1], batch_size=1000, epochs=5)
         self.model.save('model.h5')
         print('Training complete, model saved')
 
