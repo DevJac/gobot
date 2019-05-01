@@ -325,6 +325,7 @@ def load_game(game_file):
 
 
 def encode_board(board, player):
+    board.update_all_liberties()
     valid_moves = board.valid_moves(player)
     t = np.zeros((11, board.n_rows, board.n_cols))
     for r in range(board.n_rows):
