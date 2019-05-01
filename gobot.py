@@ -357,28 +357,18 @@ class NNBot:
 
     def train(self):
         for game_file in tqdm(os.listdir('games')):
+            game_file = game_file.partition('.')[0]
             if game_file in self.loaded_files:
                 continue
-            game_memory = load_game(os.path.join('games', game_file))
-            for move_memory in game_memory.move_memories:
-                board = Board.from_state_string(move_memory.board, self.board_size[0], self.board_size[1])
-                player = move_memory.player
-                move = move_memory.move
-                won = game_memory.winner == player
-                self.X.append(encode_board(board, player))
-                y = np.zeros(self.board_size)
-                y[move] = 1 if won else -1
-                self.Y.append([y, 1 if won else 0])
+            X = np.load(os.path.join('games', game_file + '.X'))
+            Y0 = np.load(os.path.join('games', game_file + '.Y0'))
+            Y1 = np.load(os.path.join('games', game_file + '.Y1'))
             self.loaded_files.add(game_file)
         self.model.compile(
             optimizer=SGD(),
-            loss=['categorical_crossentropy', 'mse'])
+            loss=['categorical_crossentropy', 'mse'],
+            loss_weight=[2, 1])
         print('Training on {:,} game with {:,} moves'.format(len(os.listdir('games')), len(self.X)))
-        X = np.array(self.X)
-        Y0 = np.array([y[0] for y in self.Y])
-        Y0 = Y0.reshape(Y0.shape[0], self.board_size[0] * self.board_size[1])
-        Y1 = np.array([y[1] for y in self.Y])
-        print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
         self.model.fit(np.array(X), [Y0, Y1], batch_size=1000, epochs=5)
         self.model.save('model.h5')
         print('Training complete, model saved')
@@ -405,8 +395,23 @@ class NNBot:
 
     def report_winner(self, game_id, winning_player):
         gm = GameMemory(tuple(self.memory), winning_player)
-        with open(f'games/{game_id}', 'wb') as f:
-            pickle.dump(gm, f, pickle.HIGHEST_PROTOCOL)
+        for move_memory in tqdm(gm.move_memories):
+            board = Board.from_state_string(move_memory.board, self.board_size[0], self.board_size[1])
+            player = move_memory.player
+            move = move_memory.move
+            won = gm.winner == player
+            self.X.append(encode_board(board, player))
+            y = np.zeros(self.board_size)
+            y[move] = 1 if won else -1
+            self.Y.append([y, 1 if won else 0])
+        X = np.array(self.X)
+        Y0 = np.array([y[0] for y in self.Y])
+        Y0 = Y0.reshape(Y0.shape[0], self.board_size[0] * self.board_size[1])
+        Y1 = np.array([y[1] for y in self.Y])
+        np.save(os.path.join('games', game_id + '.X'), X)
+        np.save(os.path.join('games', game_id + '.Y0'), Y0)
+        np.save(os.path.join('games', game_id + '.Y1'), Y1)
+        self.memory = []
 
     def create_model(self):
         if os.path.exists('model.h5'):
