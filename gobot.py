@@ -1,13 +1,19 @@
 import enum
+import itertools
 import functools
 import random
+import string
+import pickle
+import numpy as np
 from collections import namedtuple
+from keras.models import Model
+from keras.layers import Conv2D, Dense, Flatten, Input
 
 
 class Position(enum.Enum):
-    Empty = enum.auto()
-    Black = enum.auto()
-    White = enum.auto()
+    Empty = 0
+    Black = 1
+    White = 2
 
     @property
     def char(self):
@@ -45,12 +51,12 @@ Pos = Position
 
 @functools.lru_cache(maxsize=1000)
 def neighbors(point):
-    return {
+    return frozenset({
         Point(point.row - 1, point.col),
         Point(point.row + 1, point.col),
         Point(point.row, point.col - 1),
         Point(point.row, point.col + 1),
-    }
+    })
 
 
 class Point(namedtuple('Point', 'row col')):
@@ -75,6 +81,13 @@ class Board:
         b = cls(n_rows, n_cols)
         for i, c in enumerate(s):
             b.board[i] = Pos.from_char(c)
+        return b
+
+    def frozen_copy(self):
+        b = Board(self.n_rows, self.n_cols)
+        b.board = tuple(self.board)
+        b.liberties = tuple(self.liberties)
+        b.board_history = tuple()
         return b
 
     def copy(self):
@@ -152,6 +165,10 @@ class Board:
     def off_board(self, point):
         return not self.on_board(point)
 
+    def update_all_liberties(self):
+        all_points = {P(r, c) for r in range(self.n_rows) for c in range(self.n_cols)}
+        self.update_liberties(all_points)
+
     def update_liberties(self, points):
         updated_liberties = [-1 for _ in range(len(self.liberties))]
         for point in points:
@@ -217,26 +234,37 @@ class Board:
     def state(self):
         return b''.join(p.char for p in self.board)
 
+    @property
+    def state_string(self):
+        return self.state.decode('utf8')
+
     star_points = {
         (19, 19): {(3,  3), (3,  9), (3,  15),
                    (9,  3), (9,  9), (9,  15),
                    (15, 3), (15, 9), (15, 15)}
     }
 
-    @property
-    def printable_board(self):
-        out = b''
+    def printable_board(self, pretty=False):
+        def prettify(c):
+            if not pretty:
+                return c.decode('utf8')
+            if c == b'b':
+                return '●'
+            if c == b'w':
+                return '○'
+            return c.decode('utf8')
+
+        out = ''
         for r in reversed(range(self.n_rows)):
-            out += b'|'
+            out += '|'
             for c in range(self.n_cols):
                 if (r, c) in self.star_points.get((self.n_rows, self.n_cols), set()):
-                    out += b'-' + self[r, c].char
+                    out += '-' + prettify(self[r, c].char)
                 else:
-                    out += b' ' + self[r, c].char
-            out += b'|\n'
-        return out.decode('utf8')
+                    out += ' ' + prettify(self[r, c].char)
+            out += '|\n'
+        return out
 
-    @property
     def printable_liberties(self):
         out = ''
         for r in reversed(range(self.n_rows)):
@@ -250,12 +278,25 @@ class Board:
         return out
 
     def __str__(self):
-        return self.printable_board
+        return self.printable_board(pretty=True)
 
     def is_eye(self, point, pos):
         return all(self.off_board(neighboring_point) or
                    (self[neighboring_point] == pos and self.get_liberties(neighboring_point) > 1)
                    for neighboring_point in point.neighbors)
+
+    def reasonable_moves_remain(self, pos):
+        for valid_move in self.valid_moves(pos):
+            if not self.is_eye(valid_move, pos):
+                return True
+        return False
+
+    def reasonable_moves(self, pos):
+        reasonable_moves = set()
+        for valid_move in self.valid_moves(pos):
+            if not self.is_eye(valid_move, pos):
+                reasonable_moves.add(valid_move)
+        return reasonable_moves
 
     def random_move(self, pos):
         pos = self.ensure_pos(pos)
@@ -267,3 +308,104 @@ class Board:
         if not valid_moves_that_keep_eyes:
             return None
         return random.choice(valid_moves_that_keep_eyes)
+
+
+MoveMemory = namedtuple('MoveMemory', 'board player move')
+GameMemory = namedtuple('GameMemory', 'move_memories winner')
+
+
+class NNBot:
+    def __init__(self, board_size=(19, 19), explore=True):
+        self.board_size = board_size
+        self.explore = explore
+        self.model = self.create_model()
+        self.memory = []
+
+    def genmove(self, board, pos):
+        if not board.reasonable_moves_remain(pos):
+            return 'resign'
+        move_values, odds_win = self.model.predict(np.array([self.encode_board(board, pos)]))
+        # TODO: Resign if low odds of winning.
+        move_values = move_values.reshape(board.n_rows, board.n_cols)
+        if self.explore:
+            move_values = np.random.dirichlet(move_values.reshape(1, board.n_rows * board.n_cols)[0])
+            move_values = move_values.reshape(board.n_rows, board.n_cols)
+        move = None
+        reasonable_moves = board.reasonable_moves(pos)
+        while move is None or move not in reasonable_moves:
+            move = np.unravel_index(np.argmax(move_values), (board.n_rows, board.n_cols))
+            move_values[move] = 0
+        self.memory.append(MoveMemory(board.state_string, pos, move))
+        return move
+
+    def report_winner(self, game_id, winning_player):
+        gm = GameMemory(tuple(self.memory), winning_player)
+        with open(f'games/{game_id}', 'wb'
+                                      '') as f:
+            pickle.dump(gm, f, pickle.HIGHEST_PROTOCOL)
+
+    def create_model(self):
+        board_input = Input(shape=(11, self.board_size[0], self.board_size[1]), name='board_input')
+        conv1 = Conv2D(64, (3, 3), padding='same', activation='relu')(board_input)
+        conv2 = Conv2D(64, (3, 3), padding='same', activation='relu')(conv1)
+        conv3 = Conv2D(64, (3, 3), padding='same', activation='relu')(conv2)
+        flat = Flatten()(conv3)
+        processed_board = Dense(512)(flat)
+        policy_hidden_layer = Dense(512, activation='relu')(processed_board)
+        policy_output = Dense(self.board_size[0] * self.board_size[1], activation='softmax')(policy_hidden_layer)
+        value_hidden_layer = Dense(512, activation='relu')(processed_board)
+        value_output = Dense(1, activation='tanh')(value_hidden_layer)
+        model = Model(inputs=board_input, outputs=[policy_output, value_output])
+        return model
+
+    @staticmethod
+    def encode_board(board, player):
+        valid_moves = board.valid_moves(player)
+        t = np.zeros((11, board.n_rows, board.n_cols))
+        for r in range(board.n_rows):
+            for c in range(board.n_cols):
+                p = P(r, c)
+                t[0, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 1)
+                t[1, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 2)
+                t[2, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 3)
+                t[3, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) > 3)
+                t[4, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 1)
+                t[5, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 2)
+                t[6, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 3)
+                t[7, r, c] = int(board[p] == Pos.White and board.get_liberties(p) > 3)
+                t[8, r, c] = int(player == Pos.Black)
+                t[9, r, c] = int(player == Pos.White)
+                t[10, r, c] = int(p in valid_moves)
+        return t
+
+
+def play_games(n_games, board_size=19, verbose=True):
+    for game_number in range(1, n_games+1):
+        game_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
+        print('Game: {:,} = {}'.format(game_number, game_id))
+        black_player = NNBot(board_size=(board_size, board_size))
+        white_player = NNBot(board_size=(board_size, board_size))
+        board = Board(board_size, board_size)
+        while 1:
+            # Black's Move
+            move = black_player.genmove(board, Pos.Black)
+            if move == 'resign':
+                if verbose:
+                    print('White Wins!')
+                black_player.report_winner(game_id, Pos.White)
+                white_player.report_winner(game_id, Pos.White)
+                break
+            board.move(move, Pos.Black)
+            if verbose:
+                print(board)
+            # White's Move
+            move = white_player.genmove(board, Pos.White)
+            if move == 'resign':
+                if verbose:
+                    print('Black Wins!')
+                black_player.report_winner(game_id, Pos.Black)
+                white_player.report_winner(game_id, Pos.Black)
+                break
+            board.move(move, Pos.White)
+            if verbose:
+                print(board)
