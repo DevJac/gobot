@@ -2,4 +2,4 @@ if __name__ == '__main__':
     import gobot
     import ipdb
     with ipdb.launch_ipdb_on_exception():
-        gobot.play_games(20, 13, verbose=False)
+        gobot.play_games(1000, 13, train_frequency=5, verbose=True)

@@ -1,13 +1,14 @@
 import enum
-import itertools
 import functools
+import os
 import random
 import string
 import pickle
 import numpy as np
 from collections import namedtuple
-from keras.models import Model
+from keras.models import Model, load_model
 from keras.layers import Conv2D, Dense, Flatten, Input
+from keras.optimizers import SGD
 
 
 class Position(enum.Enum):
@@ -78,6 +79,8 @@ class Board:
 
     @classmethod
     def from_state_string(cls, s, n_rows=19, n_cols=19):
+        if len(s) != n_rows * n_cols:
+            raise ValueError(f'Expected board of size {n_rows} x {n_cols}, but got string of length {len(s)}')
         b = cls(n_rows, n_cols)
         for i, c in enumerate(s):
             b.board[i] = Pos.from_char(c)
@@ -248,9 +251,9 @@ class Board:
         def prettify(c):
             if not pretty:
                 return c.decode('utf8')
-            if c == b'b':
-                return '●'
             if c == b'w':
+                return '●'
+            if c == b'b':
                 return '○'
             return c.decode('utf8')
 
@@ -262,7 +265,7 @@ class Board:
                     out += '-' + prettify(self[r, c].char)
                 else:
                     out += ' ' + prettify(self[r, c].char)
-            out += '|\n'
+            out += ' |\n'
         return out
 
     def printable_liberties(self):
@@ -274,7 +277,7 @@ class Board:
                     out += ' {:02}'.format(self.get_liberties((r, c)))
                 else:
                     out += '{:3}'.format(self.get_liberties((r, c)))
-            out += '|\n'
+            out += ' |\n'
         return out
 
     def __str__(self):
@@ -314,6 +317,13 @@ MoveMemory = namedtuple('MoveMemory', 'board player move')
 GameMemory = namedtuple('GameMemory', 'move_memories winner')
 
 
+@functools.lru_cache(maxsize=1000)
+def load_game(game_file):
+    with open(game_file, 'rb') as f:
+        return pickle.load(f)
+
+
+
 class NNBot:
     def __init__(self, board_size=(19, 19), explore=True):
         self.board_size = board_size
@@ -321,18 +331,49 @@ class NNBot:
         self.model = self.create_model()
         self.memory = []
 
+    def train(self):
+        X = []
+        Y = []
+        for game_file in os.listdir('games'):
+            game_memory = load_game(os.path.join('games', game_file))
+            for move_memory in game_memory.move_memories:
+                board = Board.from_state_string(move_memory.board, self.board_size[0], self.board_size[1])
+                player = move_memory.player
+                move = move_memory.move
+                won = game_memory.winner == player
+                X.append(self.encode_board(board, player))
+                y = np.zeros(self.board_size)
+                y[move] = 1 if won else -1
+                Y.append([y, 1 if won else 0])
+        self.model.compile(
+            optimizer=SGD(),
+            loss=['categorical_crossentropy', 'mse'])
+        print('Training on {:,} game with {:,} moves'.format(len(os.listdir('games')), len(X)))
+        X = np.array(X)
+        Y0 = np.array([y[0] for y in Y])
+        Y0 = Y0.reshape(Y0.shape[0], self.board_size[0] * self.board_size[1])
+        Y1 = np.array([y[1] for y in Y])
+        print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
+        self.model.fit(np.array(X), [Y0, Y1])
+        self.model.save('model.h5')
+        print('Training complete, model saved')
+
+    def save_model(self):
+        self.model.save('model.h5')
+
     def genmove(self, board, pos):
-        if not board.reasonable_moves_remain(pos):
+        valid_moves = board.valid_moves(pos)
+        if not valid_moves:
             return 'resign'
         move_values, odds_win = self.model.predict(np.array([self.encode_board(board, pos)]))
         # TODO: Resign if low odds of winning.
         move_values = move_values.reshape(board.n_rows, board.n_cols)
         if self.explore:
-            move_values = np.random.dirichlet(move_values.reshape(1, board.n_rows * board.n_cols)[0])
+            move_values = np.random.dirichlet(move_values.reshape(1, board.n_rows * board.n_cols)[0] + 1)
             move_values = move_values.reshape(board.n_rows, board.n_cols)
         move = None
         reasonable_moves = board.reasonable_moves(pos)
-        while move is None or move not in reasonable_moves:
+        while move is None or move not in valid_moves:
             move = np.unravel_index(np.argmax(move_values), (board.n_rows, board.n_cols))
             move_values[move] = 0
         self.memory.append(MoveMemory(board.state_string, pos, move))
@@ -340,11 +381,12 @@ class NNBot:
 
     def report_winner(self, game_id, winning_player):
         gm = GameMemory(tuple(self.memory), winning_player)
-        with open(f'games/{game_id}', 'wb'
-                                      '') as f:
+        with open(f'games/{game_id}', 'wb') as f:
             pickle.dump(gm, f, pickle.HIGHEST_PROTOCOL)
 
     def create_model(self):
+        if os.path.exists('model.h5'):
+            return load_model('model.h5')
         board_input = Input(shape=(11, self.board_size[0], self.board_size[1]), name='board_input')
         conv1 = Conv2D(64, (3, 3), padding='same', activation='relu')(board_input)
         conv2 = Conv2D(64, (3, 3), padding='same', activation='relu')(conv1)
@@ -379,33 +421,33 @@ class NNBot:
         return t
 
 
-def play_games(n_games, board_size=19, verbose=True):
+def play_games(n_games, board_size=19, train_frequency=5, verbose=True):
+    player = NNBot(board_size=(board_size, board_size))
     for game_number in range(1, n_games+1):
         game_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
         print('Game: {:,} = {}'.format(game_number, game_id))
-        black_player = NNBot(board_size=(board_size, board_size))
-        white_player = NNBot(board_size=(board_size, board_size))
         board = Board(board_size, board_size)
         while 1:
             # Black's Move
-            move = black_player.genmove(board, Pos.Black)
+            move = player.genmove(board, Pos.Black)
             if move == 'resign':
                 if verbose:
                     print('White Wins!')
-                black_player.report_winner(game_id, Pos.White)
-                white_player.report_winner(game_id, Pos.White)
+                player.report_winner(game_id, Pos.White)
                 break
             board.move(move, Pos.Black)
             if verbose:
                 print(board)
             # White's Move
-            move = white_player.genmove(board, Pos.White)
+            move = player.genmove(board, Pos.White)
             if move == 'resign':
                 if verbose:
                     print('Black Wins!')
-                black_player.report_winner(game_id, Pos.Black)
-                white_player.report_winner(game_id, Pos.Black)
+                player.report_winner(game_id, Pos.Black)
                 break
             board.move(move, Pos.White)
             if verbose:
                 print(board)
+        if game_number > 0 and game_number % train_frequency == 0:
+            player.train()
+    player.train()
