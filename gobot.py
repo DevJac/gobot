@@ -6,6 +6,7 @@ import string
 import pickle
 import numpy as np
 from collections import namedtuple
+from tqdm import tqdm
 from keras.models import Model, load_model
 from keras.layers import Conv2D, Dense, Flatten, Input
 from keras.optimizers import SGD
@@ -323,6 +324,25 @@ def load_game(game_file):
         return pickle.load(f)
 
 
+def encode_board(board, player):
+    valid_moves = board.valid_moves(player)
+    t = np.zeros((11, board.n_rows, board.n_cols))
+    for r in range(board.n_rows):
+        for c in range(board.n_cols):
+            p = P(r, c)
+            t[0, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 1)
+            t[1, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 2)
+            t[2, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 3)
+            t[3, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) > 3)
+            t[4, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 1)
+            t[5, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 2)
+            t[6, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 3)
+            t[7, r, c] = int(board[p] == Pos.White and board.get_liberties(p) > 3)
+            t[8, r, c] = int(player == Pos.Black)
+            t[9, r, c] = int(player == Pos.White)
+            t[10, r, c] = int(p in valid_moves)
+    return t
+
 
 class NNBot:
     def __init__(self, board_size=(19, 19), explore=True):
@@ -330,31 +350,35 @@ class NNBot:
         self.explore = explore
         self.model = self.create_model()
         self.memory = []
+        self.loaded_files = set()
+        self.X = []
+        self.Y = []
 
     def train(self):
-        X = []
-        Y = []
-        for game_file in os.listdir('games'):
+        for game_file in tqdm(os.listdir('games')):
+            if game_file in self.loaded_files:
+                continue
             game_memory = load_game(os.path.join('games', game_file))
             for move_memory in game_memory.move_memories:
                 board = Board.from_state_string(move_memory.board, self.board_size[0], self.board_size[1])
                 player = move_memory.player
                 move = move_memory.move
                 won = game_memory.winner == player
-                X.append(self.encode_board(board, player))
+                self.X.append(encode_board(board, player))
                 y = np.zeros(self.board_size)
                 y[move] = 1 if won else -1
-                Y.append([y, 1 if won else 0])
+                self.Y.append([y, 1 if won else 0])
+            self.loaded_files.add(game_file)
         self.model.compile(
             optimizer=SGD(),
             loss=['categorical_crossentropy', 'mse'])
-        print('Training on {:,} game with {:,} moves'.format(len(os.listdir('games')), len(X)))
-        X = np.array(X)
-        Y0 = np.array([y[0] for y in Y])
+        print('Training on {:,} game with {:,} moves'.format(len(os.listdir('games')), len(self.X)))
+        X = np.array(self.X)
+        Y0 = np.array([y[0] for y in self.Y])
         Y0 = Y0.reshape(Y0.shape[0], self.board_size[0] * self.board_size[1])
-        Y1 = np.array([y[1] for y in Y])
+        Y1 = np.array([y[1] for y in self.Y])
         print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
-        self.model.fit(np.array(X), [Y0, Y1])
+        self.model.fit(np.array(X), [Y0, Y1], batch_size=200, epochs=20)
         self.model.save('model.h5')
         print('Training complete, model saved')
 
@@ -365,14 +389,13 @@ class NNBot:
         valid_moves = board.valid_moves(pos)
         if not valid_moves:
             return 'resign'
-        move_values, odds_win = self.model.predict(np.array([self.encode_board(board, pos)]))
+        move_values, odds_win = self.model.predict(np.array([encode_board(board, pos)]))
         # TODO: Resign if low odds of winning.
         move_values = move_values.reshape(board.n_rows, board.n_cols)
         if self.explore:
             move_values = np.random.dirichlet(move_values.reshape(1, board.n_rows * board.n_cols)[0] + 1)
             move_values = move_values.reshape(board.n_rows, board.n_cols)
         move = None
-        reasonable_moves = board.reasonable_moves(pos)
         while move is None or move not in valid_moves:
             move = np.unravel_index(np.argmax(move_values), (board.n_rows, board.n_cols))
             move_values[move] = 0
@@ -399,26 +422,6 @@ class NNBot:
         value_output = Dense(1, activation='tanh')(value_hidden_layer)
         model = Model(inputs=board_input, outputs=[policy_output, value_output])
         return model
-
-    @staticmethod
-    def encode_board(board, player):
-        valid_moves = board.valid_moves(player)
-        t = np.zeros((11, board.n_rows, board.n_cols))
-        for r in range(board.n_rows):
-            for c in range(board.n_cols):
-                p = P(r, c)
-                t[0, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 1)
-                t[1, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 2)
-                t[2, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) == 3)
-                t[3, r, c] = int(board[p] == Pos.Black and board.get_liberties(p) > 3)
-                t[4, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 1)
-                t[5, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 2)
-                t[6, r, c] = int(board[p] == Pos.White and board.get_liberties(p) == 3)
-                t[7, r, c] = int(board[p] == Pos.White and board.get_liberties(p) > 3)
-                t[8, r, c] = int(player == Pos.Black)
-                t[9, r, c] = int(player == Pos.White)
-                t[10, r, c] = int(p in valid_moves)
-        return t
 
 
 def play_games(n_games, board_size=19, train_frequency=5, verbose=True):
