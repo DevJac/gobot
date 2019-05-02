@@ -487,13 +487,6 @@ def compete(p1_model_file, p2_model_file, board_size=19):
     for game in range(100):
         keras.backend.clear_session()
         game_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
-        if game > 0:
-            print('P1 ({}) wins: {:,}    P2 ({}) wins: {:,}    {:.2}'.format(
-                'Black' if black_player.model_file == p1_model_file else 'White',
-                p1_wins,
-                'Black' if black_player.model_file == p2_model_file else 'White',
-                p2_wins,
-                binom_test(p2_wins, p1_wins + p2_wins, 0.5)))
         random.shuffle(model_files)
         black_player = NNBot(board_size=(board_size, board_size), model_file=model_files[0])
         white_player = NNBot(board_size=(board_size, board_size), model_file=model_files[1])
@@ -535,3 +528,9 @@ def compete(p1_model_file, p2_model_file, board_size=19):
                 p1_wins,
                 'Black' if black_player.model_file == p2_model_file else 'White',
                 p2_wins))
+        print('P1 ({}) wins: {:,}    P2 ({}) wins: {:,}    {:.2}'.format(
+            'Black' if black_player.model_file == p1_model_file else 'White',
+            p1_wins,
+            'Black' if black_player.model_file == p2_model_file else 'White',
+            p2_wins,
+            binom_test(p2_wins, p1_wins + p2_wins, 0.5)))
