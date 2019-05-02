@@ -371,10 +371,10 @@ class NNBot:
             optimizer=SGD(),
             loss=['categorical_crossentropy', 'mse'],
             loss_weights=[20, 1])
-        print('Training on {:,} game with {:,} moves'.format(len(os.listdir('games')), len(self.X)))
         X = np.concatenate(self.X)
         Y0 = np.concatenate(self.Y0)
         Y1 = np.concatenate(self.Y1)
+        print('Training on {:,} games with {:,} moves'.format(len(os.listdir('games')) // 3, X.shape[0]))
         print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
         self.model.fit(X, [Y0, Y1], batch_size=1000, epochs=5)
         self.model.save('model.h5')
