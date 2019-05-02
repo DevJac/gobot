@@ -368,7 +368,7 @@ class NNBot:
             self.Y1.append(y1)
             self.loaded_files.add(game_file)
         self.model.compile(
-            optimizer=SGD(lr=0.1),
+            optimizer=SGD(lr=0.001),
             loss=['categorical_crossentropy', 'mse'],
             loss_weights=[2, 1])
         X = np.concatenate(self.X)
@@ -377,7 +377,8 @@ class NNBot:
         print('Training on {:,} games with {:,} moves'.format(len(os.listdir('games')) // 3, X.shape[0]))
         print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
         self.model.fit(X, [Y0, Y1], batch_size=1000, epochs=5)
-        self.model.save('model.h5')
+        self.model.save('model.h5.new')
+        os.rename('model.h5.new', 'model.h5')
         self.model = self.create_model()
         print('Training complete, model saved')
 
