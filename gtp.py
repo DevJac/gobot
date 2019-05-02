@@ -2,7 +2,7 @@ import random
 import re
 import sys
 import traceback
-from gobot import Board, P, Pos
+from gobot import Board, P, Pos, NNBot
 
 
 def letter_to_int(letter):
@@ -39,6 +39,7 @@ class Game:
         self.board = None
         self.board_size = None
         self.komi = None
+        self.agent = NNBot(board_size=(9, 9), explore=False)
 
     @staticmethod
     def command_name(_args):
@@ -79,14 +80,14 @@ class Game:
         color, _, vertex = args.partition(' ')
         if vertex != 'pass':
             self.board.move(gtp_vertex_to_point(vertex), color_to_pos(color))
-        log('Board state:\n' + self.board.printable_board + '\n' + self.board.printable_liberties)
+        log('Board state:\n' + self.board.printable_board() + '\n' + self.board.printable_liberties())
 
     def command_genmove(self, color):
-        move = self.board.random_move(color_to_pos(color))
-        if not move:
-            return 'pass'
+        move = self.agent.genmove(self.board, color_to_pos(color))
+        if move == 'resign':
+            return 'resign'
         self.board.move(move, color_to_pos(color))
-        log('Board state:\n' + self.board.printable_board + '\n' + self.board.printable_liberties)
+        log('Board state:\n' + self.board.printable_board() + '\n' + self.board.printable_liberties())
         return point_to_gtp_vertex(move)
 
 
