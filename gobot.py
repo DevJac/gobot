@@ -368,9 +368,9 @@ class NNBot:
             self.Y1.append(y1)
             self.loaded_files.add(game_file)
         self.model.compile(
-            optimizer=SGD(),
+            optimizer=SGD(lr=0.1),
             loss=['categorical_crossentropy', 'mse'],
-            loss_weights=[20, 1])
+            loss_weights=[2, 1])
         X = np.concatenate(self.X)
         Y0 = np.concatenate(self.Y0)
         Y1 = np.concatenate(self.Y1)
@@ -378,6 +378,7 @@ class NNBot:
         print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
         self.model.fit(X, [Y0, Y1], batch_size=1000, epochs=5)
         self.model.save('model.h5')
+        self.model = self.create_model()
         print('Training complete, model saved')
 
     def save_model(self):
@@ -390,7 +391,7 @@ class NNBot:
         move_values, odds_win = self.model.predict(np.array([encode_board(board, pos)]))
         # TODO: Resign if low odds of winning.
         move_values = move_values.reshape(board.n_rows, board.n_cols)
-        if self.explore:
+        if self.explore and random.random() < 0.1:
             move_values = np.random.dirichlet(move_values.reshape(1, board.n_rows * board.n_cols)[0] + 1)
             move_values = move_values.reshape(board.n_rows, board.n_cols)
         move = None
@@ -423,16 +424,17 @@ class NNBot:
 
     def create_model(self):
         if os.path.exists('model.h5'):
+            print('Loading model from file')
             return load_model('model.h5')
         board_input = Input(shape=(11, self.board_size[0], self.board_size[1]), name='board_input')
-        conv1 = Conv2D(64, (3, 3), padding='same', activation='relu')(board_input)
-        conv2 = Conv2D(64, (3, 3), padding='same', activation='relu')(conv1)
-        conv3 = Conv2D(64, (3, 3), padding='same', activation='relu')(conv2)
+        conv1 = Conv2D(100, (3, 3), padding='same', activation='relu')(board_input)
+        conv2 = Conv2D(100, (3, 3), padding='same', activation='relu')(conv1)
+        conv3 = Conv2D(100, (3, 3), padding='same', activation='relu')(conv2)
         flat = Flatten()(conv3)
-        processed_board = Dense(512)(flat)
-        policy_hidden_layer = Dense(512, activation='relu')(processed_board)
+        processed_board = Dense(1000)(flat)
+        policy_hidden_layer = Dense(1000, activation='relu')(processed_board)
         policy_output = Dense(self.board_size[0] * self.board_size[1], activation='softmax')(policy_hidden_layer)
-        value_hidden_layer = Dense(512, activation='relu')(processed_board)
+        value_hidden_layer = Dense(1000, activation='relu')(processed_board)
         value_output = Dense(1, activation='tanh')(value_hidden_layer)
         model = Model(inputs=board_input, outputs=[policy_output, value_output])
         return model
