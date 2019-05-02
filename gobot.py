@@ -345,7 +345,8 @@ def encode_board(board, player):
 
 
 class NNBot:
-    def __init__(self, board_size=(19, 19), explore=True):
+    def __init__(self, board_size=(19, 19), explore=True, model_file=None):
+        self.model_file = model_file or 'model.h5'
         self.board_size = board_size
         self.explore = explore
         self.model = self.create_model()
@@ -355,7 +356,14 @@ class NNBot:
         self.Y0 = []
         self.Y1 = []
 
-    def train(self):
+    def clear_memory(self):
+        self.memory = []
+        self.loaded_files = set()
+        self.X = []
+        self.Y0 = []
+        self.Y1 = []
+
+    def train(self, batch_size=1000, epochs=1, learning_rate=0.01):
         for game_file in tqdm(os.listdir('games')):
             game_file = game_file.partition('.')[0]
             if game_file in self.loaded_files:
@@ -368,7 +376,7 @@ class NNBot:
             self.Y1.append(y1)
             self.loaded_files.add(game_file)
         self.model.compile(
-            optimizer=SGD(lr=0.001),
+            optimizer=SGD(lr=learning_rate),
             loss=['categorical_crossentropy', 'mse'],
             loss_weights=[2, 1])
         X = np.concatenate(self.X)
@@ -376,14 +384,14 @@ class NNBot:
         Y1 = np.concatenate(self.Y1)
         print('Training on {:,} games with {:,} moves'.format(len(os.listdir('games')) // 3, X.shape[0]))
         print(f'Shapes: {X.shape} {Y0.shape} {Y1.shape}')
-        self.model.fit(X, [Y0, Y1], batch_size=1000, epochs=5)
-        self.model.save('model.h5.new')
-        os.rename('model.h5.new', 'model.h5')
+        self.model.fit(X, [Y0, Y1], batch_size=batch_size, epochs=epochs)
+        self.model.save(f'{self.model_file}.new')
+        os.rename(f'{self.model_file}.new', self.model_file)
         self.model = self.create_model()
         print('Training complete, model saved')
 
     def save_model(self):
-        self.model.save('model.h5')
+        self.model.save(self.model_file)
 
     def genmove(self, board, pos):
         valid_moves = board.valid_moves(pos)
@@ -405,7 +413,7 @@ class NNBot:
     def report_winner(self, game_id, winning_player):
         X = []
         Y = []
-        for move_memory in tqdm(self.memory):
+        for move_memory in self.memory:
             board = Board.from_state_string(move_memory.board, self.board_size[0], self.board_size[1])
             player = move_memory.player
             move = move_memory.move
@@ -424,9 +432,9 @@ class NNBot:
         self.memory = []
 
     def create_model(self):
-        if os.path.exists('model.h5'):
+        if os.path.exists(self.model_file):
             print('Loading model from file')
-            return load_model('model.h5')
+            return load_model(self.model_file)
         board_input = Input(shape=(11, self.board_size[0], self.board_size[1]), name='board_input')
         conv1 = Conv2D(100, (3, 3), padding='same', activation='relu')(board_input)
         conv2 = Conv2D(100, (3, 3), padding='same', activation='relu')(conv1)
@@ -441,11 +449,12 @@ class NNBot:
         return model
 
 
-def play_games(n_games, board_size=19, train_frequency=5, verbose=True):
+def self_play(n_games, board_size=19, verbose=True):
     player = NNBot(board_size=(board_size, board_size))
     for game_number in range(1, n_games+1):
         game_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
-        print('Game: {:,} = {}'.format(game_number, game_id))
+        if verbose:
+            print('Game: {:,} = {}'.format(game_number, game_id))
         board = Board(board_size, board_size)
         while 1:
             # Black's Move
@@ -468,6 +477,67 @@ def play_games(n_games, board_size=19, train_frequency=5, verbose=True):
             board.move(move, Pos.White)
             if verbose:
                 print(board)
-        if game_number > 0 and game_number % train_frequency == 0:
-            player.train()
+
+
+def train(board_size=19):
+    player = NNBot(board_size=(board_size, board_size))
     player.train()
+
+
+def compete(p1_model_file, p2_model_file, board_size=19):
+    p1_wins = 0
+    p2_wins = 0
+    model_files = [p1_model_file, p2_model_file]
+    for game in range(100):
+        game_id = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(6))
+        if game > 0:
+            print('P1 ({}) wins: {:,}    P2 ({}) wins: {:,}'.format(
+                'Black' if black_player.model_file == p1_model_file else 'White',
+                p1_wins,
+                'Black' if black_player.model_file == p2_model_file else 'White',
+                p2_wins))
+        random.shuffle(model_files)
+        black_player = NNBot(board_size=(board_size, board_size), model_file=model_files[0])
+        white_player = NNBot(board_size=(board_size, board_size), model_file=model_files[1])
+        board = Board(board_size, board_size)
+        while 1:
+            # Black's Move
+            move = black_player.genmove(board, Pos.Black)
+            if move == 'resign':
+                print(f'White Wins! ({white_player.model_file})')
+                black_player.report_winner(game_id, Pos.White)
+                black_player.clear_memory()
+                white_player.report_winner(game_id, Pos.White)
+                white_player.clear_memory()
+                if white_player.model_file == p1_model_file:
+                    p1_wins += 1
+                else:
+                    p2_wins += 1
+                break
+            board.move(move, Pos.Black)
+            print(board)
+            print('P1 ({}) wins: {:,}    P2 ({}) wins: {:,}'.format(
+                'Black' if black_player.model_file == p1_model_file else 'White',
+                p1_wins,
+                'Black' if black_player.model_file == p2_model_file else 'White',
+                p2_wins))
+            # White's Move
+            move = white_player.genmove(board, Pos.White)
+            if move == 'resign':
+                print(f'Black Wins! ({black_player.model_file})')
+                black_player.report_winner(game_id, Pos.Black)
+                black_player.clear_memory()
+                white_player.report_winner(game_id, Pos.Black)
+                white_player.clear_memory()
+                if black_player.model_file == p1_model_file:
+                    p1_wins += 1
+                else:
+                    p2_wins += 1
+                break
+            board.move(move, Pos.White)
+            print(board)
+            print('P1 ({}) wins: {:,}    P2 ({}) wins: {:,}'.format(
+                'Black' if black_player.model_file == p1_model_file else 'White',
+                p1_wins,
+                'Black' if black_player.model_file == p2_model_file else 'White',
+                p2_wins))
