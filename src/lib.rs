@@ -50,10 +50,6 @@ impl Point {
     fn neighbors(self) -> NeighborsIter {
         NeighborsIter::new(self)
     }
-
-    fn to_index(self, board_size: u8) -> usize {
-        (self.x * (board_size as i8) + self.y) as usize
-    }
 }
 
 impl std::ops::Add for Point {
@@ -109,7 +105,7 @@ impl Iterator for NeighborsIter {
 
 #[derive(Debug)]
 struct Board {
-    size: u8,
+    size: i8,
     board: Vec<BoardPosition>,
     liberties: Vec<BoardPosition>,
     history: Vec<Board>,
@@ -118,17 +114,21 @@ struct Board {
 impl std::ops::Index<Point> for Board {
     type Output = BoardPosition;
 
-    fn index(&self, index: Point) -> &BoardPosition {
-        &self.board[index.to_index(self.size)]
+    fn index(&self, point: Point) -> &BoardPosition {
+        &self.board[self.to_index(point)]
     }
 }
 
 impl std::ops::IndexMut<Point> for Board {
-    fn index_mut(&mut self, index: Point) -> &mut BoardPosition {
-        &mut self.board[index.to_index(self.size)]
+    fn index_mut(&mut self, point: Point) -> &mut BoardPosition {
+        let i = self.to_index(point);
+        &mut self.board[i]
     }
 }
 
 impl Board {
-    // TODO
+    #[allow(clippy::cast_sign_loss)]
+    fn to_index(&self, p: Point) -> usize {
+        (p.x * self.size + p.y) as usize
+    }
 }
