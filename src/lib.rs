@@ -266,8 +266,8 @@ impl Board {
     }
 
     fn valid_moves<'a>(&'a self, pos: BoardPosition) -> impl IntoIterator<Item = Point> + 'a {
-        let points: PointIter = self.points();
-        points.filter(move |p: &Point| self.can_place_stone_at(*p, pos) && self.not_ko(*p, pos))
+        self.points()
+            .filter(move |p: &Point| self.can_place_stone_at(*p, pos) && self.not_ko(*p, pos))
     }
 
     fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
