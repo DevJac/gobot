@@ -20,7 +20,7 @@ enum Direction {
     Right,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum BoardPosition {
     Empty,
     Black,
@@ -114,12 +114,44 @@ impl Iterator for NeighborsIter {
     }
 }
 
+struct PointIter {
+    board_size: i8,
+    x: i8,
+    y: i8,
+}
+
+impl PointIter {
+    fn new(board_size: i8) -> Self {
+        PointIter {
+            board_size,
+            x: 0,
+            y: 0,
+        }
+    }
+}
+
+impl Iterator for PointIter {
+    type Item = Point;
+
+    fn next(&mut self) -> Option<Point> {
+        if self.x >= self.board_size || self.y >= self.board_size {
+            return None;
+        }
+        let next = P(self.x, self.y);
+        if self.x >= self.board_size {
+            self.x -= self.board_size;
+            self.y += 1;
+        }
+        Some(next)
+    }
+}
+
 #[derive(Debug)]
 struct Board {
     size: i8,
     board: Vec<BoardPosition>,
     liberties: Vec<i16>,
-    history: Vec<Board>,
+    history: HashSet<Vec<BoardPosition>>,
 }
 
 impl std::ops::Index<Point> for Board {
@@ -158,6 +190,10 @@ impl Board {
 
     fn off_board(&self, point: Point) -> bool {
         !self.on_board(point)
+    }
+
+    fn points(&self) -> PointIter {
+        PointIter::new(self.size)
     }
 
     #[allow(
@@ -209,15 +245,16 @@ impl Board {
         }
     }
 
+    fn update_all_liberties(&mut self) {
+        self.update_liberties(self.points());
+    }
+
     fn remove_stones_without_liberties(&mut self, color_to_remove: BoardPosition) {
         let mut points_removed = HashSet::with_capacity(8);
-        for x in 0..self.size {
-            for y in 0..self.size {
-                let p = P(x, y);
-                if self[p] == color_to_remove && self.get_liberties(p) == 0 {
-                    self[p] = Empty;
-                    points_removed.insert(p);
-                }
+        for p in self.points() {
+            if self[p] == color_to_remove && self.get_liberties(p) == 0 {
+                self[p] = Empty;
+                points_removed.insert(p);
             }
         }
         self.update_liberties(points_removed.into_iter().flat_map(Point::with_neighbors));
@@ -228,5 +265,6 @@ impl Board {
         self[point] = pos;
         self.update_liberties(point.with_neighbors());
         self.remove_stones_without_liberties(pos.other());
+        self.history.insert(self.board.clone());
     }
 }
