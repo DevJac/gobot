@@ -122,7 +122,7 @@ struct PointIter {
 
 impl PointIter {
     fn new(board_size: i8) -> Self {
-        PointIter {
+        Self {
             board_size,
             x: 0,
             y: 0,
@@ -146,7 +146,7 @@ impl Iterator for PointIter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Board {
     size: i8,
     board: Vec<BoardPosition>,
@@ -224,10 +224,15 @@ impl Board {
         }
         let mut updated_liberties: Vec<i16> = vec![-1; self.liberties.len()];
         for point in points {
+            if self[point] == Empty {
+                self.set_liberties(point, 0);
+                continue;
+            }
+
             if self.off_board(point) {
                 continue;
             }
-            if self.get_liberties(point) != -1 {
+            if updated_liberties[self.to_index(point)] != -1 {
                 continue;
             }
             let mut group = HashSet::with_capacity(8);
@@ -258,6 +263,53 @@ impl Board {
             }
         }
         self.update_liberties(points_removed.into_iter().flat_map(Point::with_neighbors));
+    }
+
+    fn valid_moves<'a>(&'a self, pos: BoardPosition) -> impl IntoIterator<Item = Point> + 'a {
+        let points: PointIter = self.points();
+        points.filter(move |p: &Point| self.can_place_stone_at(*p, pos) && self.not_ko(*p, pos))
+    }
+
+    fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
+        // We can't play on an occupied point.
+        if self[point] != Empty {
+            return false;
+        }
+        for neighboring_point in point.neighbors() {
+            if self.off_board(neighboring_point) {
+                continue;
+            }
+            let neighboring_position = self[neighboring_point];
+            // If a neighboring point is empty, then the placed stone will have a liberty.
+            if neighboring_position == Empty {
+                return true;
+            }
+            let neighboring_liberties = self.get_liberties(neighboring_point);
+            // We can add to one of our groups, as long as it has enough liberties.
+            if neighboring_position == pos && neighboring_liberties > 1 {
+                return true;
+            }
+            // We can take the last liberty of an opposing group.
+            if neighboring_position == pos.other() && neighboring_liberties == 0 {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn not_ko(&self, point: Point, pos: BoardPosition) -> bool {
+        let not_opposing_stone_in_atari = |neighboring_point| {
+            self.off_board(neighboring_point)
+                || (self[neighboring_point] != pos.other()
+                    && self.get_liberties(neighboring_point) != 1)
+        };
+        if point.neighbors().all(not_opposing_stone_in_atari) {
+            return true;
+        }
+        // TODO: We should be able to avoid a full clone here.
+        let mut b = self.clone();
+        b.play(point, pos);
+        b.history.contains(&b.board)
     }
 
     fn play(&mut self, point: Point, pos: BoardPosition) {
