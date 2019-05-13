@@ -151,6 +151,7 @@ pub struct Board {
     size: i8,
     board: Vec<BoardPosition>,
     liberties: Vec<i16>,
+    // TODO: With multiple copies of the board, there will be a lot of history duplication. Fix.
     history: HashSet<Vec<BoardPosition>>,
 }
 
