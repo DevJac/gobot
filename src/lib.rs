@@ -154,25 +154,19 @@ struct Board {
     history: HashSet<Vec<BoardPosition>>,
 }
 
-impl std::ops::Index<Point> for Board {
-    type Output = BoardPosition;
-
-    fn index(&self, point: Point) -> &BoardPosition {
-        &self.board[self.to_index(point)]
-    }
-}
-
-impl std::ops::IndexMut<Point> for Board {
-    fn index_mut(&mut self, point: Point) -> &mut BoardPosition {
-        let i = self.to_index(point);
-        &mut self.board[i]
-    }
-}
-
 impl Board {
     #[allow(clippy::cast_sign_loss)]
     fn to_index(&self, point: Point) -> usize {
         (point.x * self.size + point.y) as usize
+    }
+
+    fn get_position(&self, point: Point) -> BoardPosition {
+        self.board[self.to_index(point)]
+    }
+
+    fn set_position(&mut self, point: Point, pos: BoardPosition) {
+        let i = self.to_index(point);
+        self.board[i] = pos;
     }
 
     fn get_liberties(&self, point: Point) -> i16 {
@@ -212,9 +206,9 @@ impl Board {
                 if board.off_board(neighboring_point) {
                     continue;
                 }
-                if board[neighboring_point] == Empty {
+                if board.get_position(neighboring_point) == Empty {
                     group_liberties.insert(neighboring_point);
-                } else if board[this_point] == board[neighboring_point]
+                } else if board.get_position(this_point) == board.get_position(neighboring_point)
                     && !group.contains(&neighboring_point)
                 {
                     group.insert(neighboring_point);
@@ -224,7 +218,7 @@ impl Board {
         }
         let mut updated_liberties: Vec<i16> = vec![-1; self.liberties.len()];
         for point in points {
-            if self[point] == Empty {
+            if self.get_position(point) == Empty {
                 self.set_liberties(point, 0);
                 continue;
             }
@@ -257,8 +251,8 @@ impl Board {
     fn remove_stones_without_liberties(&mut self, color_to_remove: BoardPosition) {
         let mut points_removed = HashSet::with_capacity(8);
         for p in self.points() {
-            if self[p] == color_to_remove && self.get_liberties(p) == 0 {
-                self[p] = Empty;
+            if self.get_position(p) == color_to_remove && self.get_liberties(p) == 0 {
+                self.set_position(p, Empty);
                 points_removed.insert(p);
             }
         }
@@ -272,14 +266,14 @@ impl Board {
 
     fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
         // We can't play on an occupied point.
-        if self[point] != Empty {
+        if self.get_position(point) != Empty {
             return false;
         }
         for neighboring_point in point.neighbors() {
             if self.off_board(neighboring_point) {
                 continue;
             }
-            let neighboring_position = self[neighboring_point];
+            let neighboring_position = self.get_position(neighboring_point);
             // If a neighboring point is empty, then the placed stone will have a liberty.
             if neighboring_position == Empty {
                 return true;
@@ -300,7 +294,7 @@ impl Board {
     fn not_ko(&self, point: Point, pos: BoardPosition) -> bool {
         let not_opposing_stone_in_atari = |neighboring_point| {
             self.off_board(neighboring_point)
-                || (self[neighboring_point] != pos.other()
+                || (self.get_position(neighboring_point) != pos.other()
                     && self.get_liberties(neighboring_point) != 1)
         };
         if point.neighbors().all(not_opposing_stone_in_atari) {
@@ -314,7 +308,7 @@ impl Board {
 
     fn play(&mut self, point: Point, pos: BoardPosition) {
         // TODO: We do not prevent illegal moves. Fix.
-        self[point] = pos;
+        self.set_position(point, pos);
         self.update_liberties(point.with_neighbors());
         self.remove_stones_without_liberties(pos.other());
         self.history.insert(self.board.clone());
