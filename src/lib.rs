@@ -7,7 +7,7 @@
     rustdoc,
     unused
 )]
-#![allow(dead_code, non_snake_case)] // TODO: Remove
+#![allow(non_snake_case)]
 
 use std::collections::HashSet;
 use BoardPosition::{Black, Empty, White};
@@ -21,7 +21,7 @@ enum Direction {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum BoardPosition {
+pub enum BoardPosition {
     Empty,
     Black,
     White,
@@ -38,12 +38,12 @@ impl BoardPosition {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-struct Point {
+pub struct Point {
     x: i8,
     y: i8,
 }
 
-fn P(x: i8, y: i8) -> Point {
+pub fn P(x: i8, y: i8) -> Point {
     Point { x, y }
 }
 
@@ -147,7 +147,7 @@ impl Iterator for PointIter {
 }
 
 #[derive(Clone, Debug)]
-struct Board {
+pub struct Board {
     size: i8,
     board: Vec<BoardPosition>,
     liberties: Vec<i16>,
@@ -155,6 +155,17 @@ struct Board {
 }
 
 impl Board {
+    #[allow(clippy::cast_sign_loss)]
+    pub fn new(size: i8) -> Self {
+        let vec_len = (size as usize).pow(2);
+        Self {
+            size,
+            board: vec![Empty; vec_len],
+            liberties: vec![0; vec_len],
+            history: HashSet::with_capacity(8),
+        }
+    }
+
     #[allow(clippy::cast_sign_loss)]
     fn to_index(&self, point: Point) -> usize {
         (point.x * self.size + point.y) as usize
@@ -167,6 +178,7 @@ impl Board {
     fn set_position(&mut self, point: Point, pos: BoardPosition) {
         let i = self.to_index(point);
         self.board[i] = pos;
+        self.update_all_liberties();
     }
 
     fn get_liberties(&self, point: Point) -> i16 {
@@ -259,7 +271,7 @@ impl Board {
         self.update_liberties(points_removed.into_iter().flat_map(Point::with_neighbors));
     }
 
-    fn valid_moves<'a>(&'a self, pos: BoardPosition) -> impl IntoIterator<Item = Point> + 'a {
+    pub fn valid_moves<'a>(&'a self, pos: BoardPosition) -> impl IntoIterator<Item = Point> + 'a {
         self.points()
             .filter(move |p: &Point| self.can_place_stone_at(*p, pos) && self.not_ko(*p, pos))
     }
@@ -306,7 +318,7 @@ impl Board {
         b.history.contains(&b.board)
     }
 
-    fn play(&mut self, point: Point, pos: BoardPosition) {
+    pub fn play(&mut self, point: Point, pos: BoardPosition) {
         // TODO: We do not prevent illegal moves. Fix.
         self.set_position(point, pos);
         self.update_liberties(point.with_neighbors());
