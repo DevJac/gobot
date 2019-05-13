@@ -9,6 +9,7 @@
 )]
 #![allow(dead_code, non_snake_case)] // TODO: Remove
 
+use std::collections::HashSet;
 use BoardPosition::{Black, Empty, White};
 use Direction::{Down, Left, Right, Up};
 
@@ -48,7 +49,11 @@ fn P(x: i8, y: i8) -> Point {
 
 impl Point {
     fn neighbors(self) -> NeighborsIter {
-        NeighborsIter::new(self)
+        NeighborsIter::new(self, false)
+    }
+
+    fn with_neighbors(self) -> NeighborsIter {
+        NeighborsIter::new(self, true)
     }
 }
 
@@ -64,13 +69,15 @@ impl std::ops::Add for Point {
 }
 
 struct NeighborsIter {
+    include_self: bool,
     point: Point,
     neighbor: Option<Direction>,
 }
 
 impl NeighborsIter {
-    fn new(point: Point) -> Self {
+    fn new(point: Point, include_self: bool) -> Self {
         Self {
+            include_self,
             point,
             neighbor: Some(Up),
         }
@@ -81,6 +88,10 @@ impl Iterator for NeighborsIter {
     type Item = Point;
 
     fn next(&mut self) -> Option<Point> {
+        if self.include_self {
+            self.include_self = false;
+            return Some(self.point);
+        }
         match self.neighbor {
             Some(Up) => {
                 self.neighbor = Some(Right);
@@ -132,6 +143,15 @@ impl Board {
         (point.x * self.size + point.y) as usize
     }
 
+    fn get_liberties(&self, point: Point) -> i16 {
+        self.liberties[self.to_index(point)]
+    }
+
+    fn set_liberties(&mut self, point: Point, liberties: i16) {
+        let i = self.to_index(point);
+        self.liberties[i] = liberties;
+    }
+
     fn on_board(&self, point: Point) -> bool {
         0 <= point.x && point.x < self.size && 0 <= point.y && point.y < self.size
     }
@@ -140,34 +160,43 @@ impl Board {
         !self.on_board(point)
     }
 
-    fn update_liberties(&mut self, points: impl IntoIterator<Item=Point>) {
-        use std::collections::HashSet;
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::needless_range_loop
+    )]
+    fn update_liberties(&mut self, points: impl IntoIterator<Item = Point>) {
+        fn recurse(
+            board: &Board,
+            this_point: Point,
+            group: &mut HashSet<Point>,
+            group_liberties: &mut HashSet<Point>,
+        ) {
+            for neighboring_point in this_point.neighbors() {
+                if board.off_board(neighboring_point) {
+                    continue;
+                }
+                if board[neighboring_point] == Empty {
+                    group_liberties.insert(neighboring_point);
+                } else if board[this_point] == board[neighboring_point]
+                    && !group.contains(&neighboring_point)
+                {
+                    group.insert(neighboring_point);
+                    recurse(board, neighboring_point, group, group_liberties);
+                }
+            }
+        }
         let mut updated_liberties: Vec<i16> = vec![-1; self.liberties.len()];
         for point in points {
             if self.off_board(point) {
-                continue
+                continue;
             }
-            if updated_liberties[self.to_index(point)] != -1 {
-                continue
+            if self.get_liberties(point) != -1 {
+                continue;
             }
-            let mut group = std::collections::HashSet::with_capacity(8);
+            let mut group = HashSet::with_capacity(8);
             group.insert(point);
-            let mut group_liberties = std::collections::HashSet::with_capacity(8);
-
-            fn recurse(board: &Board, this_point: Point, group: &mut HashSet<Point>, group_liberties: &mut HashSet<Point>) {
-                for neighboring_point in this_point.neighbors() {
-                    if board.off_board(neighboring_point) {
-                        continue
-                    }
-                    if board[neighboring_point] == Empty {
-                        group_liberties.insert(neighboring_point);
-                    } else if board[this_point] == board[neighboring_point] && !group.contains(&neighboring_point) {
-                        group.insert(neighboring_point);
-                        recurse(board, neighboring_point, group, group_liberties);
-                    }
-                }
-            }
-
+            let mut group_liberties = HashSet::with_capacity(8);
             recurse(self, point, &mut group, &mut group_liberties);
             for group_point in group {
                 updated_liberties[self.to_index(group_point)] = group_liberties.len() as i16;
@@ -178,5 +207,26 @@ impl Board {
                 self.liberties[i] = updated_liberties[i];
             }
         }
+    }
+
+    fn remove_stones_without_liberties(&mut self, color_to_remove: BoardPosition) {
+        let mut points_removed = HashSet::with_capacity(8);
+        for x in 0..self.size {
+            for y in 0..self.size {
+                let p = P(x, y);
+                if self[p] == color_to_remove && self.get_liberties(p) == 0 {
+                    self[p] = Empty;
+                    points_removed.insert(p);
+                }
+            }
+        }
+        self.update_liberties(points_removed.into_iter().flat_map(Point::with_neighbors));
+    }
+
+    fn play(&mut self, point: Point, pos: BoardPosition) {
+        // TODO: We do not prevent illegal moves. Fix.
+        self[point] = pos;
+        self.update_liberties(point.with_neighbors());
+        self.remove_stones_without_liberties(pos.other());
     }
 }
