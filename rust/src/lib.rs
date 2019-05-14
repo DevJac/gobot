@@ -55,9 +55,8 @@ impl Board {
             .collect())
     }
 
-    fn test(&self, point: PyObject) -> PyResult<&str> {
-        let x: &Point = point.cast_as(Python::acquire_gil().python())?;
-        Ok(match self.board.get_position(x.point) {
+    fn test(&self, point: &Point) -> PyResult<&str> {
+        Ok(match self.board.get_position(point.point) {
             board::BoardPosition::Empty => "e",
             board::BoardPosition::Black => "b",
             board::BoardPosition::White => "w",
