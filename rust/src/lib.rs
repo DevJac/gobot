@@ -54,6 +54,15 @@ impl Board {
             .map(|p| Point { point: p })
             .collect())
     }
+
+    fn test(&self, point: PyObject) -> PyResult<&str> {
+        let x: &Point = point.cast_as(Python::acquire_gil().python())?;
+        Ok(match self.board.get_position(x.point) {
+            board::BoardPosition::Empty => "e",
+            board::BoardPosition::Black => "b",
+            board::BoardPosition::White => "w",
+        })
+    }
 }
 
 #[pymodule]
