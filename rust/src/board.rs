@@ -43,20 +43,6 @@ pub struct Point {
     y: i8,
 }
 
-impl std::convert::From<Point> for (i8, i8) {
-    fn from(point: Point) -> Self {
-        (point.x, point.y)
-    }
-}
-
-impl std::iter::FromIterator<Point> for Vec<(i8, i8)> {
-    fn from_iter<I: IntoIterator<Item = Point>>(iter: I) -> Self {
-        iter.into_iter()
-            .map::<(i8, i8), _>(std::convert::From::from)
-            .collect()
-    }
-}
-
 pub fn P(x: i8, y: i8) -> Point {
     Point { x, y }
 }
@@ -68,6 +54,14 @@ impl Point {
 
     fn with_neighbors(self) -> NeighborsIter {
         NeighborsIter::new(self, true)
+    }
+
+    pub fn x(self) -> i8 {
+        self.x
+    }
+
+    pub fn y(self) -> i8 {
+        self.y
     }
 }
 
@@ -152,6 +146,7 @@ impl Iterator for PointIter {
             return None;
         }
         let next = P(self.x, self.y);
+        self.x += 1;
         if self.x >= self.board_size {
             self.x -= self.board_size;
             self.y += 1;
