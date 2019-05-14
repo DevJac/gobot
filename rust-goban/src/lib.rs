@@ -178,7 +178,8 @@ impl Board {
 
     #[allow(clippy::cast_sign_loss)]
     fn to_index(&self, point: Point) -> usize {
-        (point.x * self.size + point.y) as usize
+        dbg!(point);
+        (point.x as usize) * (self.size as usize) + (point.y as usize)
     }
 
     pub fn get_position(&self, point: Point) -> BoardPosition {
@@ -240,12 +241,11 @@ impl Board {
         }
         let mut updated_liberties: Vec<i16> = vec![-1; self.liberties.len()];
         for point in points {
-            if self.get_position(point) == Empty {
-                self.set_liberties(point, 0);
+            if self.off_board(point) {
                 continue;
             }
-
-            if self.off_board(point) {
+            if self.get_position(point) == Empty {
+                self.set_liberties(point, 0);
                 continue;
             }
             if updated_liberties[self.to_index(point)] != -1 {
@@ -330,5 +330,13 @@ impl Board {
         self.update_liberties(point.with_neighbors());
         self.remove_stones_without_liberties(pos.other());
         self.history.insert(self.board.clone());
+    }
+}
+
+#[test]
+fn fill_board() {
+    let mut b = Board::new(19);
+    for p in b.points() {
+        b.set_position(p, Black);
     }
 }
