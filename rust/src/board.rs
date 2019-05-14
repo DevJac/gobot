@@ -48,11 +48,11 @@ pub fn P(x: i8, y: i8) -> Point {
 }
 
 impl Point {
-    fn neighbors(self) -> NeighborsIter {
+    pub fn neighbors(self) -> NeighborsIter {
         NeighborsIter::new(self, false)
     }
 
-    fn with_neighbors(self) -> NeighborsIter {
+    pub fn with_neighbors(self) -> NeighborsIter {
         NeighborsIter::new(self, true)
     }
 
@@ -76,7 +76,7 @@ impl std::ops::Add for Point {
     }
 }
 
-struct NeighborsIter {
+pub struct NeighborsIter {
     include_self: bool,
     point: Point,
     neighbor: Option<Direction>,
@@ -122,7 +122,7 @@ impl Iterator for NeighborsIter {
     }
 }
 
-struct PointIter {
+pub struct PointIter {
     board_size: i8,
     x: i8,
     y: i8,
@@ -181,14 +181,14 @@ impl Board {
         (point.x * self.size + point.y) as usize
     }
 
-    fn get_position(&self, point: Point) -> BoardPosition {
+    pub fn get_position(&self, point: Point) -> BoardPosition {
         self.board[self.to_index(point)]
     }
 
-    fn set_position(&mut self, point: Point, pos: BoardPosition) {
+    pub fn set_position(&mut self, point: Point, pos: BoardPosition) {
         let i = self.to_index(point);
         self.board[i] = pos;
-        self.update_all_liberties();
+        self.update_liberties(point.with_neighbors());
     }
 
     fn get_liberties(&self, point: Point) -> i16 {
@@ -200,15 +200,15 @@ impl Board {
         self.liberties[i] = liberties;
     }
 
-    fn on_board(&self, point: Point) -> bool {
+    pub fn on_board(&self, point: Point) -> bool {
         0 <= point.x && point.x < self.size && 0 <= point.y && point.y < self.size
     }
 
-    fn off_board(&self, point: Point) -> bool {
+    pub fn off_board(&self, point: Point) -> bool {
         !self.on_board(point)
     }
 
-    fn points(&self) -> PointIter {
+    pub fn points(&self) -> PointIter {
         PointIter::new(self.size)
     }
 
@@ -264,10 +264,6 @@ impl Board {
                 self.liberties[i] = updated_liberties[i];
             }
         }
-    }
-
-    fn update_all_liberties(&mut self) {
-        self.update_liberties(self.points());
     }
 
     fn remove_stones_without_liberties(&mut self, color_to_remove: BoardPosition) {
