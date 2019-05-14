@@ -1,26 +1,16 @@
-#![allow(clippy::new_ret_no_self, clippy::use_self)]
-
 mod board;
 
 use pyo3::prelude::*;
-use pyo3::PyObjectProtocol;
 
 #[pyclass]
 struct Point {
     point: board::Point,
 }
 
-#[pyproto]
-impl PyObjectProtocol for Point {
-    fn __repr__(&self) -> PyResult<String> {
-        Ok(format!("Point({}, {})", self.point.x(), self.point.y()))
-    }
-}
-
 #[pymethods]
 impl Point {
     #[new]
-    fn new(obj: &PyRawObject, x: i8, y: i8) {
+    fn pynew(obj: &PyRawObject, x: i8, y: i8) {
         obj.init(Self {
             point: board::P(x, y),
         })
@@ -45,7 +35,7 @@ struct Board {
 #[pymethods]
 impl Board {
     #[new]
-    fn new(obj: &PyRawObject, size: i8) {
+    fn pynew(obj: &PyRawObject, size: i8) {
         obj.init(Self {
             board: board::Board::new(size),
         });
