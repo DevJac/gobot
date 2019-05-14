@@ -7,7 +7,7 @@
     rustdoc,
     unused
 )]
-#![allow(non_snake_case)]
+#![allow(non_snake_case, clippy::module_name_repetitions)]
 
 use std::collections::HashSet;
 use BoardPosition::{Black, Empty, White};
@@ -41,6 +41,20 @@ impl BoardPosition {
 pub struct Point {
     x: i8,
     y: i8,
+}
+
+impl std::convert::From<Point> for (i8, i8) {
+    fn from(point: Point) -> Self {
+        (point.x, point.y)
+    }
+}
+
+impl std::iter::FromIterator<Point> for Vec<(i8, i8)> {
+    fn from_iter<I: IntoIterator<Item = Point>>(iter: I) -> Self {
+        iter.into_iter()
+            .map::<(i8, i8), _>(std::convert::From::from)
+            .collect()
+    }
 }
 
 pub fn P(x: i8, y: i8) -> Point {
