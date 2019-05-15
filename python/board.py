@@ -45,6 +45,11 @@ class Board:
     def __init__(self, size=19):
         self._board = pygoban.Board(size)
 
+    def copy(self):
+        b = Board.__new__(Board)
+        b._board = self._board.copy()
+        return b
+
     @classmethod
     def from_string(cls, s, size=19):
         if len(s) != size**2:

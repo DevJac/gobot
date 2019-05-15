@@ -47,3 +47,14 @@ def test_cant_play_on_own_stones():
     b.play((0, 0), Black)
     assert P(0, 0) not in b.valid_moves(Black)
     assert P(0, 0) not in b.valid_moves(White)
+
+
+def test_board_copy():
+    b1 = Board()
+    b1[0, 0] = Black
+    b2 = b1.copy()
+    b2[1, 1] = White
+    assert b1[0, 0] == Black
+    assert b2[0, 0] == Black
+    assert b1[1, 1] == Empty
+    assert b2[1, 1] == White
