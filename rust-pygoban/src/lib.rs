@@ -1,10 +1,9 @@
-mod board;
-
+use goban;
 use pyo3::prelude::*;
 
 #[pyclass]
 struct Point {
-    point: board::Point,
+    point: goban::Point,
 }
 
 #[pymethods]
@@ -12,7 +11,7 @@ impl Point {
     #[new]
     fn pynew(obj: &PyRawObject, x: i8, y: i8) {
         obj.init(Self {
-            point: board::P(x, y),
+            point: goban::P(x, y),
         })
     }
 
@@ -29,7 +28,7 @@ impl Point {
 
 #[pyclass]
 struct Board {
-    board: board::Board,
+    board: goban::Board,
 }
 
 #[pymethods]
@@ -37,15 +36,15 @@ impl Board {
     #[new]
     fn pynew(obj: &PyRawObject, size: i8) {
         obj.init(Self {
-            board: board::Board::new(size),
+            board: goban::Board::new(size),
         });
     }
 
     fn valid_moves(&self, pos: &str) -> PyResult<Vec<Point>> {
         let pos = match pos {
-            "b" => board::BoardPosition::Black,
-            "w" => board::BoardPosition::White,
-            _ => board::BoardPosition::Empty,
+            "b" => goban::BoardPosition::Black,
+            "w" => goban::BoardPosition::White,
+            _ => goban::BoardPosition::Empty,
         };
         Ok(self
             .board
@@ -57,15 +56,15 @@ impl Board {
 
     fn test(&self, point: &Point) -> PyResult<&str> {
         Ok(match self.board.get_position(point.point) {
-            board::BoardPosition::Empty => "e",
-            board::BoardPosition::Black => "b",
-            board::BoardPosition::White => "w",
+            goban::BoardPosition::Empty => "e",
+            goban::BoardPosition::Black => "b",
+            goban::BoardPosition::White => "w",
         })
     }
 }
 
 #[pymodule]
-fn goban(_py: Python, m: &PyModule) -> PyResult<()> {
+fn pygoban(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Point>()?;
     m.add_class::<Board>()?;
     Ok(())

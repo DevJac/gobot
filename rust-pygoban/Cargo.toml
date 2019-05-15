@@ -1,5 +1,5 @@
 [package]
-name = "goban"
+name = "pygoban"
 version = "0.1.0"
 authors = ["Devin Jacobs <dbuttonz@gmail.com>"]
 edition = "2018"
@@ -12,3 +12,4 @@ version = "0.7.0-alpha.1"
 features = ["extension-module"]
 
 [dependencies]
+goban = {path = "../rust-goban"}

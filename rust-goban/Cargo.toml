@@ -1,5 +1,5 @@
 [package]
-name = "rust-goban"
+name = "goban"
 version = "0.1.0"
 authors = ["Devin Jacobs <dbuttonz@gmail.com>"]
 edition = "2018"
