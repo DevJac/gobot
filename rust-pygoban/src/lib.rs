@@ -60,12 +60,12 @@ impl Point {
     }
 
     #[getter]
-    fn get_x(&self) -> PyResult<i8> {
+    fn x(&self) -> PyResult<i8> {
         Ok(self.point.x())
     }
 
     #[getter]
-    fn get_y(&self) -> PyResult<i8> {
+    fn y(&self) -> PyResult<i8> {
         Ok(self.point.y())
     }
 }
@@ -121,6 +121,12 @@ impl Board {
         obj.init(Self {
             board: goban::Board::new(size),
         });
+    }
+
+    fn copy(&self) -> PyResult<Self> {
+        Ok(Self {
+            board: self.board.clone(),
+        })
     }
 
     #[getter]
