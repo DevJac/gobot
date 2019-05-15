@@ -1,6 +1,4 @@
-import itertools
 from enum import Enum, auto
-import numpy as np
 import pygoban
 
 
@@ -48,25 +46,19 @@ class Board:
         self._board = pygoban.Board(size)
 
     @classmethod
-    def from_state_string(cls, s, size=19):
+    def from_string(cls, s, size=19):
         if len(s) != size**2:
             raise ValueError(
                 f'Expected board of size {size} x {size} (= {size**2}), '
                 f'but got string of length {len(s)}')
         b = cls(size)
         for i, c in enumerate(s):
-            b[P(*b.from_index(i))] = BoardPosition.from_char(c)
+            b[divmod(i, size)] = BoardPosition.from_char(c)
         return b
 
     @property
     def size(self):
         return self._board.size
-
-    def to_index(self, x, y):
-        return x * self.size + y
-
-    def from_index(self, i):
-        return divmod(i, self.size)
 
     def __getitem__(self, item):
         return BoardPosition.from_char(self._board[ensure_point(item)])
@@ -111,28 +103,3 @@ class Board:
 
     def __str__(self):
         return self.printable_board()
-
-
-def encode_board(board, player):
-    valid_moves = set(board.valid_moves(player))
-    t = np.zeros((11, board.size, board.size))
-    for r, c in itertools.product(range(board.size), repeat=2):
-        p = P(r, c)
-        t[0, r, c] = int(board[p] == Black and board.liberties(p) == 1)
-        t[1, r, c] = int(board[p] == Black and board.liberties(p) == 2)
-        t[2, r, c] = int(board[p] == Black and board.liberties(p) == 3)
-        t[3, r, c] = int(board[p] == Black and board.liberties(p) > 3)
-        t[4, r, c] = int(board[p] == White and board.liberties(p) == 1)
-        t[5, r, c] = int(board[p] == White and board.liberties(p) == 2)
-        t[6, r, c] = int(board[p] == White and board.liberties(p) == 3)
-        t[7, r, c] = int(board[p] == White and board.liberties(p) > 3)
-        t[8, r, c] = int(player == Black)
-        t[9, r, c] = int(player == White)
-        t[10, r, c] = int(p in valid_moves)
-    return t
-
-
-if __name__ == '__main__':
-    b = Board(9)
-    b[P(0, 0)] = Black
-    print(encode_board(b, Black))
