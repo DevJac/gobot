@@ -3,6 +3,8 @@ use goban;
 use pyo3::class;
 use pyo3::exceptions;
 use pyo3::prelude::*;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 fn str_to_pos(s: &str) -> goban::BoardPosition {
     match s {
@@ -21,7 +23,6 @@ fn pos_to_str(pos: goban::BoardPosition) -> &'static str {
 }
 
 #[pyclass]
-#[derive(PartialEq)]
 struct Point {
     point: goban::Point,
 }
@@ -32,10 +33,18 @@ impl class::basic::PyObjectProtocol for Point {
         Ok(format!("Point({}, {})", self.point.x(), self.point.y()))
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    fn __hash__(&self) -> PyResult<isize> {
+        let mut hasher = DefaultHasher::new();
+        self.point.hash(&mut hasher);
+        let hash_num: u64 = hasher.finish();
+        Ok(hash_num as isize)
+    }
+
     fn __richcmp__(&self, other: &Point, op: class::basic::CompareOp) -> PyResult<bool> {
         match op {
-            class::basic::CompareOp::Eq => Ok(self == other),
-            class::basic::CompareOp::Ne => Ok(self != other),
+            class::basic::CompareOp::Eq => Ok(self.point == other.point),
+            class::basic::CompareOp::Ne => Ok(self.point != other.point),
             _ => Err(exceptions::NotImplementedError::py_err(())),
         }
     }
@@ -74,6 +83,14 @@ impl class::basic::PyObjectProtocol for Board {
             self.board.size(),
             self.board.size()
         ))
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    fn __hash__(&self) -> PyResult<isize> {
+        let mut hasher = DefaultHasher::new();
+        self.board.hash(&mut hasher);
+        let hash_num: u64 = hasher.finish();
+        Ok(hash_num as isize)
     }
 
     fn __richcmp__(&self, other: &Board, op: class::basic::CompareOp) -> PyResult<bool> {

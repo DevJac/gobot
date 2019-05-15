@@ -174,6 +174,12 @@ impl PartialEq for Board {
     }
 }
 
+impl std::hash::Hash for Board {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.board.hash(state);
+    }
+}
+
 impl Board {
     #[allow(clippy::cast_sign_loss)]
     pub fn new(size: i8) -> Self {

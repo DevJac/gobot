@@ -12,7 +12,7 @@ White = 'w'
 
 
 def encode_board(board, player):
-    valid_moves = board.valid_moves(player)
+    valid_moves = set(board.valid_moves(player))
     t = np.zeros((11, board.size, board.size))
     for r, c in itertools.product(range(board.size), repeat=2):
         p = Point(r, c)
