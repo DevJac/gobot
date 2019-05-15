@@ -178,8 +178,11 @@ impl Board {
 
     #[allow(clippy::cast_sign_loss)]
     fn to_index(&self, point: Point) -> usize {
-        dbg!(point);
         (point.x as usize) * (self.size as usize) + (point.y as usize)
+    }
+
+    pub fn get_size(&self) -> i8 {
+        self.size
     }
 
     pub fn get_position(&self, point: Point) -> BoardPosition {
@@ -192,7 +195,7 @@ impl Board {
         self.update_liberties(point.with_neighbors());
     }
 
-    fn get_liberties(&self, point: Point) -> i16 {
+    pub fn get_liberties(&self, point: Point) -> i16 {
         self.liberties[self.to_index(point)]
     }
 

@@ -1,9 +1,44 @@
+#![allow(clippy::use_self)]
 use goban;
+use pyo3::class;
+use pyo3::exceptions;
 use pyo3::prelude::*;
 
+fn str_to_pos(s: &str) -> goban::BoardPosition {
+    match s {
+        "b" => goban::BoardPosition::Black,
+        "w" => goban::BoardPosition::White,
+        _ => goban::BoardPosition::Empty,
+    }
+}
+
+fn pos_to_str(pos: goban::BoardPosition) -> &'static str {
+    match pos {
+        goban::BoardPosition::Empty => " ",
+        goban::BoardPosition::Black => "b",
+        goban::BoardPosition::White => "w",
+    }
+}
+
 #[pyclass]
+#[derive(PartialEq)]
 struct Point {
     point: goban::Point,
+}
+
+#[pyproto]
+impl class::basic::PyObjectProtocol for Point {
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!("Point({}, {})", self.point.x(), self.point.y()))
+    }
+
+    fn __richcmp__(&self, other: &Point, op: class::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            class::basic::CompareOp::Eq => Ok(self == other),
+            class::basic::CompareOp::Ne => Ok(self != other),
+            _ => Err(exceptions::NotImplementedError::py_err(())),
+        }
+    }
 }
 
 #[pymethods]
@@ -31,6 +66,18 @@ struct Board {
     board: goban::Board,
 }
 
+#[pyproto]
+impl class::mapping::PyMappingProtocol for Board {
+    fn __getitem__(&self, key: &Point) -> PyResult<&'p str> {
+        Ok(pos_to_str(self.board.get_position(key.point)))
+    }
+
+    fn __setitem__(&mut self, key: &Point, value: &str) -> PyResult<()> {
+        self.board.set_position(key.point, str_to_pos(value));
+        Ok(())
+    }
+}
+
 #[pymethods]
 impl Board {
     #[new]
@@ -38,6 +85,15 @@ impl Board {
         obj.init(Self {
             board: goban::Board::new(size),
         });
+    }
+
+    #[getter]
+    fn get_size(&self) -> PyResult<i8> {
+        Ok(self.board.get_size())
+    }
+
+    fn get_liberties(&self, point: &Point) -> PyResult<i16> {
+        Ok(self.board.get_liberties(point.point))
     }
 
     fn valid_moves(&self, pos: &str) -> PyResult<Vec<Point>> {
@@ -52,14 +108,6 @@ impl Board {
             .into_iter()
             .map(|p| Point { point: p })
             .collect())
-    }
-
-    fn test(&self, point: &Point) -> PyResult<&str> {
-        Ok(match self.board.get_position(point.point) {
-            goban::BoardPosition::Empty => "e",
-            goban::BoardPosition::Black => "b",
-            goban::BoardPosition::White => "w",
-        })
     }
 }
 
