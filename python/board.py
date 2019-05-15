@@ -1,4 +1,5 @@
 import itertools
+from enum import Enum, auto
 import numpy as np
 import pygoban
 
@@ -6,20 +7,38 @@ import pygoban
 P = pygoban.Point
 
 
-Empty = ' '
-Black = 'b'
-White = 'w'
-VALID_POS = {Empty, Black, White}
+class BoardPosition(Enum):
+    EMPTY = auto()
+    BLACK = auto()
+    WHITE = auto()
+
+    @staticmethod
+    def from_char(c):
+        if c == ' ':
+            return Empty
+        if c == 'b':
+            return Black
+        if c == 'w':
+            return White
+        raise ValueError(f'Unknown BoardPosition character: {repr(c)}')
+
+    def to_char(self):
+        if self == Empty:
+            return ' '
+        if self == Black:
+            return 'b'
+        if self == White:
+            return 'w'
+        raise ValueError(f'Unknown BoardPosition self value: {repr(self)}')
 
 
-def ensure_pos(c):
-    if c not in VALID_POS:
-        raise ValueError(f'Expected one of {VALID_POS}, but found: {repr(pos)}')
-    return c
+Empty = BoardPosition.EMPTY
+Black = BoardPosition.BLACK
+White = BoardPosition.WHITE
 
 
 def ensure_point(p):
-    if type(p) != pygoban.Point:
+    if type(p) is not pygoban.Point:
         return P(*p)
     return p
 
@@ -29,14 +48,14 @@ class Board:
         self._board = pygoban.Board(size)
 
     @classmethod
-    def from_state_string(cls, s, size):
+    def from_state_string(cls, s, size=19):
         if len(s) != size**2:
             raise ValueError(
                 f'Expected board of size {size} x {size} (= {size**2}), '
                 f'but got string of length {len(s)}')
         b = cls(size)
         for i, c in enumerate(s):
-            b[P(*b.from_index(i))] = ensure_pos(c)
+            b[P(*b.from_index(i))] = BoardPosition.from_char(c)
         return b
 
     @property
@@ -50,19 +69,19 @@ class Board:
         return divmod(i, self.size)
 
     def __getitem__(self, item):
-        return self._board[ensure_point(item)]
+        return BoardPosition.from_char(self._board[ensure_point(item)])
 
     def __setitem__(self, item, value):
-        self._board[ensure_point(item)] = ensure_pos(value)
+        self._board[ensure_point(item)] = value.to_char()
 
     def liberties(self, point):
         return self._board.liberties(ensure_point(point))
 
     def valid_moves(self, pos):
-        return self._board.valid_moves(ensure_pos(pos))
+        return self._board.valid_moves(pos.to_char())
 
     def play(self, point, pos):
-        self._board.play(ensure_point(point), ensure_pos(pos))
+        self._board.play(ensure_point(point), pos.to_char())
 
     star_points = {
         19: {(3,  3), (3,  9), (3,  15),
@@ -70,29 +89,28 @@ class Board:
              (15, 3), (15, 9), (15, 15)}
     }
 
-    def printable_board(self, pretty=False):
-        def prettify(c):
-            if not pretty:
-                return c
-            if c == White:
+    def printable_board(self):
+        def prettify(pos):
+            if pos == Empty:
+                return ' '
+            if pos == White:
                 return '●'
-            if c == Black:
+            if pos == Black:
                 return '○'
-            return c
-
+            raise ValueError(f'Unknown position: {repr(pos)}')
         out = ''
         for r in reversed(range(self.size)):
             out += '|'
             for c in range(self.size):
                 if (r, c) in self.star_points.get(self.size, set()):
-                    out += '-' + prettify(ensure_pos(self[r, c]))
+                    out += '-' + prettify(self[r, c])
                 else:
-                    out += ' ' + prettify(ensure_pos(self[r, c]))
+                    out += ' ' + prettify(self[r, c])
             out += ' |\n'
         return out
 
     def __str__(self):
-        return self.printable_board(True)
+        return self.printable_board()
 
 
 def encode_board(board, player):
