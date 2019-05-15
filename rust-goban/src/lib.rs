@@ -150,10 +150,10 @@ impl Iterator for PointIter {
             return None;
         }
         let next = P(self.x, self.y);
-        self.x += 1;
-        if self.x >= self.board_size {
-            self.x -= self.board_size;
-            self.y += 1;
+        self.y += 1;
+        if self.y >= self.board_size {
+            self.y -= self.board_size;
+            self.x += 1;
         }
         Some(next)
     }
@@ -298,7 +298,7 @@ impl Board {
 
     pub fn valid_moves<'a>(&'a self, pos: BoardPosition) -> impl IntoIterator<Item = Point> + 'a {
         self.points()
-            .filter(move |p: &Point| self.can_place_stone_at(*p, pos) && self.not_ko(*p, pos))
+            .filter(move |p: &Point| self.can_place_stone_at(*p, pos) && !self.ko(*p, pos))
     }
 
     fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
@@ -321,26 +321,26 @@ impl Board {
                 return true;
             }
             // We can take the last liberty of an opposing group.
-            if neighboring_position == pos.other() && neighboring_liberties == 0 {
+            if neighboring_position == pos.other() && neighboring_liberties == 1 {
                 return true;
             }
         }
         false
     }
 
-    fn not_ko(&self, point: Point, pos: BoardPosition) -> bool {
-        let not_opposing_stone_in_atari = |neighboring_point| {
-            self.off_board(neighboring_point)
-                || (self.position(neighboring_point) != pos.other()
-                    && self.liberties(neighboring_point) != 1)
+    fn ko(&self, point: Point, pos: BoardPosition) -> bool {
+        let would_be_captured = |neighboring_point| {
+            self.on_board(neighboring_point)
+                && self.position(neighboring_point) == pos.other()
+                && self.liberties(neighboring_point) == 1
         };
-        if point.neighbors().all(not_opposing_stone_in_atari) {
-            return true;
+        if !point.neighbors().any(would_be_captured) {
+            return false;
         }
         // TODO: We should be able to avoid a full clone here.
         let mut b = self.clone();
         b.play(point, pos);
-        b.history.contains(&b.board)
+        self.history.contains(&b.board)
     }
 
     pub fn play(&mut self, point: Point, pos: BoardPosition) {
@@ -358,4 +358,68 @@ fn fill_board() {
     for p in b.points() {
         b.set_position(p, Black);
     }
+}
+
+#[test]
+fn atari_placement() {
+    let mut b = Board::new(9);
+    b.set_position(P(0, 0), Black);
+    b.set_position(P(1, 1), Black);
+    assert!(b
+        .valid_moves(Black)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(0, 1)));
+    assert!(b
+        .valid_moves(White)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(0, 1)));
+}
+
+#[test]
+fn ko_placement() {
+    let mut b = Board::new(9);
+    b.set_position(P(1, 0), Black);
+    b.set_position(P(0, 1), Black);
+    b.set_position(P(1, 2), Black);
+    b.set_position(P(2, 0), White);
+    b.set_position(P(3, 1), White);
+    b.set_position(P(2, 2), White);
+    assert!(b
+        .valid_moves(Black)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(2, 1)));
+    assert!(b
+        .valid_moves(White)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(2, 1)));
+    assert_eq!(b.history.len(), 0);
+    b.play(P(2, 1), Black);
+    assert_eq!(b.history.len(), 1);
+    assert!(b
+        .valid_moves(Black)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(1, 1)));
+    assert!(b
+        .valid_moves(White)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(1, 1)));
+    assert_eq!(b.history.len(), 1);
+    b.play(P(1, 1), White);
+    assert_eq!(b.history.len(), 2);
+    assert!(!b
+        .valid_moves(Black)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(2, 1)));
+    assert!(b
+        .valid_moves(White)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(2, 1)));
 }

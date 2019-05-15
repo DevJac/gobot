@@ -133,17 +133,17 @@ impl Board {
     }
 
     fn valid_moves(&self, pos: &str) -> PyResult<Vec<Point>> {
-        let pos = match pos {
-            "b" => goban::BoardPosition::Black,
-            "w" => goban::BoardPosition::White,
-            _ => goban::BoardPosition::Empty,
-        };
         Ok(self
             .board
-            .valid_moves(pos)
+            .valid_moves(str_to_pos(pos))
             .into_iter()
             .map(|p| Point { point: p })
             .collect())
+    }
+
+    fn play(&mut self, point: &Point, pos: &str) -> PyResult<()> {
+        self.board.play(point.point, str_to_pos(pos));
+        Ok(())
     }
 }
 
