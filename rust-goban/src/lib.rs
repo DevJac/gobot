@@ -44,10 +44,14 @@ pub struct Point {
 }
 
 pub fn P(x: i8, y: i8) -> Point {
-    Point { x, y }
+    Point::new(x, y)
 }
 
 impl Point {
+    pub fn new(x: i8, y: i8) -> Self {
+        Self { x, y }
+    }
+
     pub fn neighbors(self) -> NeighborsIter {
         NeighborsIter::new(self, false)
     }
@@ -181,11 +185,11 @@ impl Board {
         (point.x as usize) * (self.size as usize) + (point.y as usize)
     }
 
-    pub fn get_size(&self) -> i8 {
+    pub fn size(&self) -> i8 {
         self.size
     }
 
-    pub fn get_position(&self, point: Point) -> BoardPosition {
+    pub fn position(&self, point: Point) -> BoardPosition {
         self.board[self.to_index(point)]
     }
 
@@ -195,7 +199,7 @@ impl Board {
         self.update_liberties(point.with_neighbors());
     }
 
-    pub fn get_liberties(&self, point: Point) -> i16 {
+    pub fn liberties(&self, point: Point) -> i16 {
         self.liberties[self.to_index(point)]
     }
 
@@ -232,9 +236,9 @@ impl Board {
                 if board.off_board(neighboring_point) {
                     continue;
                 }
-                if board.get_position(neighboring_point) == Empty {
+                if board.position(neighboring_point) == Empty {
                     group_liberties.insert(neighboring_point);
-                } else if board.get_position(this_point) == board.get_position(neighboring_point)
+                } else if board.position(this_point) == board.position(neighboring_point)
                     && !group.contains(&neighboring_point)
                 {
                     group.insert(neighboring_point);
@@ -247,7 +251,7 @@ impl Board {
             if self.off_board(point) {
                 continue;
             }
-            if self.get_position(point) == Empty {
+            if self.position(point) == Empty {
                 self.set_liberties(point, 0);
                 continue;
             }
@@ -272,7 +276,7 @@ impl Board {
     fn remove_stones_without_liberties(&mut self, color_to_remove: BoardPosition) {
         let mut points_removed = HashSet::with_capacity(8);
         for p in self.points() {
-            if self.get_position(p) == color_to_remove && self.get_liberties(p) == 0 {
+            if self.position(p) == color_to_remove && self.liberties(p) == 0 {
                 self.set_position(p, Empty);
                 points_removed.insert(p);
             }
@@ -287,19 +291,19 @@ impl Board {
 
     fn can_place_stone_at(&self, point: Point, pos: BoardPosition) -> bool {
         // We can't play on an occupied point.
-        if self.get_position(point) != Empty {
+        if self.position(point) != Empty {
             return false;
         }
         for neighboring_point in point.neighbors() {
             if self.off_board(neighboring_point) {
                 continue;
             }
-            let neighboring_position = self.get_position(neighboring_point);
+            let neighboring_position = self.position(neighboring_point);
             // If a neighboring point is empty, then the placed stone will have a liberty.
             if neighboring_position == Empty {
                 return true;
             }
-            let neighboring_liberties = self.get_liberties(neighboring_point);
+            let neighboring_liberties = self.liberties(neighboring_point);
             // We can add to one of our groups, as long as it has enough liberties.
             if neighboring_position == pos && neighboring_liberties > 1 {
                 return true;
@@ -315,8 +319,8 @@ impl Board {
     fn not_ko(&self, point: Point, pos: BoardPosition) -> bool {
         let not_opposing_stone_in_atari = |neighboring_point| {
             self.off_board(neighboring_point)
-                || (self.get_position(neighboring_point) != pos.other()
-                    && self.get_liberties(neighboring_point) != 1)
+                || (self.position(neighboring_point) != pos.other()
+                    && self.liberties(neighboring_point) != 1)
         };
         if point.neighbors().all(not_opposing_stone_in_atari) {
             return true;
