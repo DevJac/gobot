@@ -168,6 +168,12 @@ pub struct Board {
     history: HashSet<Vec<BoardPosition>>,
 }
 
+impl PartialEq for Board {
+    fn eq(&self, other: &Self) -> bool {
+        self.board == other.board
+    }
+}
+
 impl Board {
     #[allow(clippy::cast_sign_loss)]
     pub fn new(size: i8) -> Self {

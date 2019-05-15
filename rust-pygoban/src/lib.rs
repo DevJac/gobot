@@ -44,7 +44,7 @@ impl class::basic::PyObjectProtocol for Point {
 #[pymethods]
 impl Point {
     #[new]
-    fn pynew(obj: &PyRawObject, x: i8, y: i8) {
+    fn init(obj: &PyRawObject, x: i8, y: i8) {
         obj.init(Self {
             point: goban::P(x, y),
         })
@@ -67,9 +67,28 @@ struct Board {
 }
 
 #[pyproto]
+impl class::basic::PyObjectProtocol for Board {
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!(
+            "<Board {}x{}>",
+            self.board.size(),
+            self.board.size()
+        ))
+    }
+
+    fn __richcmp__(&self, other: &Board, op: class::basic::CompareOp) -> PyResult<bool> {
+        match op {
+            class::basic::CompareOp::Eq => Ok(self.board == other.board),
+            class::basic::CompareOp::Ne => Ok(self.board != other.board),
+            _ => Err(exceptions::NotImplementedError::py_err(())),
+        }
+    }
+}
+
+#[pyproto]
 impl class::mapping::PyMappingProtocol for Board {
     fn __getitem__(&self, key: &Point) -> PyResult<&'p str> {
-        Ok(pos_to_str(self.board.get_position(key.point)))
+        Ok(pos_to_str(self.board.position(key.point)))
     }
 
     fn __setitem__(&mut self, key: &Point, value: &str) -> PyResult<()> {
@@ -81,19 +100,19 @@ impl class::mapping::PyMappingProtocol for Board {
 #[pymethods]
 impl Board {
     #[new]
-    fn pynew(obj: &PyRawObject, size: i8) {
+    fn init(obj: &PyRawObject, size: i8) {
         obj.init(Self {
             board: goban::Board::new(size),
         });
     }
 
     #[getter]
-    fn get_size(&self) -> PyResult<i8> {
-        Ok(self.board.get_size())
+    fn size(&self) -> PyResult<i8> {
+        Ok(self.board.size())
     }
 
-    fn get_liberties(&self, point: &Point) -> PyResult<i16> {
-        Ok(self.board.get_liberties(point.point))
+    fn liberties(&self, point: &Point) -> PyResult<i16> {
+        Ok(self.board.liberties(point.point))
     }
 
     fn valid_moves(&self, pos: &str) -> PyResult<Vec<Point>> {
