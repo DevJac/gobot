@@ -83,7 +83,7 @@ class NNBot:
         np.save(os.path.join('games', game_id + '.Y1'), Y1)
         self.memory = []
 
-    def train(self, batch_size=1000, epochs=5, learning_rate=0.01):
+    def train(self, batch_size=1000, epochs=1, learning_rate=0.01):
         X = []
         Y0 = []
         Y1 = []
