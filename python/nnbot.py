@@ -65,7 +65,7 @@ class NNBot:
         game_id = game_id or ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(8))
         X = []
         Y = []
-        for move_memory in tqdm(self.memory):
+        for move_memory in self.memory:
             board = move_memory.board
             player = move_memory.player
             move = move_memory.move
