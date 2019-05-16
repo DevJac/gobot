@@ -206,9 +206,13 @@ impl Board {
     }
 
     pub fn set_position(&mut self, point: Point, pos: BoardPosition) {
+        self.set_position_without_updating_liberties(point, pos);
+        self.update_liberties(point.with_neighbors());
+    }
+
+    fn set_position_without_updating_liberties(&mut self, point: Point, pos: BoardPosition) {
         let i = self.to_index(point);
         self.board[i] = pos;
-        self.update_liberties(point.with_neighbors());
     }
 
     pub fn liberties(&self, point: Point) -> i16 {
@@ -289,7 +293,7 @@ impl Board {
         let mut points_removed = HashSet::with_capacity(8);
         for p in self.points() {
             if self.position(p) == color_to_remove && self.liberties(p) == 0 {
-                self.set_position(p, Empty);
+                self.set_position_without_updating_liberties(p, Empty);
                 points_removed.insert(p);
             }
         }
@@ -422,4 +426,34 @@ fn ko_placement() {
         .into_iter()
         .collect::<HashSet<Point>>()
         .contains(&P(2, 1)));
+}
+
+#[test]
+fn valid_moves_have_liberties() {
+    let mut b = Board::new(5);
+    b.set_position(P(0, 1), Black);
+    b.set_position(P(1, 1), Black);
+    assert!(b
+        .valid_moves(White)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(0, 0)));
+    b.set_position(P(1, 0), Black);
+    assert!(!b
+        .valid_moves(White)
+        .into_iter()
+        .collect::<HashSet<Point>>()
+        .contains(&P(0, 0)));
+}
+
+#[test]
+fn multiple_stones_captured() {
+    let mut b = Board::new(5);
+    b.set_position(P(0, 0), Black);
+    b.set_position(P(1, 0), White);
+    b.set_position(P(0, 1), Black);
+    b.set_position(P(1, 1), White);
+    b.play(P(0, 2), White);
+    assert_eq!(b.position(P(0, 0)), Empty);
+    assert_eq!(b.position(P(0, 1)), Empty);
 }
