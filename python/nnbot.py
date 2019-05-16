@@ -168,8 +168,9 @@ if __name__ == '__main__':
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument('command', choices=['gengames', 'train'])
+    ap.add_argument('--verbose', action='store_true')
     args = ap.parse_args()
     if args.command == 'gengames':
-        gen_games(200, 9)
+        gen_games(200, 9, args.verbose)
     elif args.command == 'train':
         train(9)
