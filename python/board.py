@@ -99,10 +99,10 @@ class Board:
         for r in reversed(range(self.size)):
             out += '|'
             for c in range(self.size):
-                if (r, c) in self.star_points.get(self.size, set()):
-                    out += '-' + prettify(self[r, c])
+                if (c, r) in self.star_points.get(self.size, set()):
+                    out += '-' + prettify(self[c, r])
                 else:
-                    out += ' ' + prettify(self[r, c])
+                    out += ' ' + prettify(self[c, r])
             out += ' |\n'
         return out
 

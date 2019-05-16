@@ -3,6 +3,7 @@ import itertools
 import os
 import random
 import string
+from time import sleep
 from tqdm import tqdm
 import numpy as np
 from keras.models import Model, load_model
@@ -72,7 +73,7 @@ class NNBot:
             won = winning_player == player
             X.append(encode_board(board, player))
             y = np.zeros(board.size**2)
-            y[move] = 1 if won else -1
+            y[np.ravel_multi_index((move.x, move.y), (self.board_size, self.board_size))] = 1 if won else -1
             Y.append([y, 1 if won else 0])
         X = np.array(X)
         Y0 = np.array([y[0] for y in Y])
@@ -135,6 +136,7 @@ def gen_games(n_games, board_size=19, verbose=True):
     for game_number in range(1, n_games+1):
         if verbose:
             print('Game: {:,}'.format(game_number))
+            sleep(1)
         board = Board(board_size)
         while 1:
             # Black's Move
@@ -142,21 +144,25 @@ def gen_games(n_games, board_size=19, verbose=True):
             if resign:
                 if verbose:
                     print('White Wins!')
+                    sleep(1)
                 player.report_winner(White)
                 break
             board.play(move, Black)
             if verbose:
                 print(board)
+                sleep(1)
             # White's Move
             resign, move = player.genmove(board, White)
             if resign:
                 if verbose:
                     print('Black Wins!')
+                    sleep(1)
                 player.report_winner(Black)
                 break
             board.play(move, White)
             if verbose:
                 print(board)
+                sleep(1)
 
 
 def train(board_size=19):
