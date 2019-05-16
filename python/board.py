@@ -29,6 +29,14 @@ class BoardPosition(Enum):
             return 'w'
         raise ValueError(f'Unknown BoardPosition self value: {repr(self)}')
 
+    @property
+    def other(self):
+        if self == Black:
+            return White
+        if self == White:
+            return Black
+        return self
+
 
 Empty = BoardPosition.EMPTY
 Black = BoardPosition.BLACK

@@ -5,6 +5,8 @@ import random
 import string
 from tqdm import tqdm
 import numpy as np
+from scipy.stats import binom_test
+import keras
 from keras.models import Model, load_model
 from keras.layers import Conv2D, Dense, Flatten, Input
 from keras.optimizers import SGD
@@ -164,13 +166,58 @@ def train(board_size=19):
     player.train()
 
 
+def try_model(p1_model_file, p2_model_file, board_size=19):
+    def turn(current_player, other_player, color):
+        resign, move = black_player.genmove(board, Black)
+        if resign:
+            print(f'{color.other} Wins! ({other_player.model_file})')
+            black_player.report_winner(color.other)
+            white_player.report_winner(color.other)
+            wins[current_player.model_file] += 1
+            return True
+        board.play(move, color)
+        print(board)
+        print('{} ({}) wins: {:,}    {} ({}) wins: {:,}    {:.2}'.format(
+            p1_model_file,
+            'Black' if black_player.model_file == p1_model_file else 'White',
+            wins[p1_model_file],
+            p2_model_file,
+            'Black' if black_player.model_file == p2_model_file else 'White',
+            wins[p2_model_file],
+            binom_test(wins[p1_model_file], sum(wins.values(), 0.5))))
+    wins = {p1_model_file: 0, p2_model_file: 0}
+    model_files = [p1_model_file, p2_model_file]
+    for game in range(100):
+        keras.backend.clear_session()
+        random.shuffle(model_files)
+        black_player = NNBot(board_size=board_size, model_file=model_files[0])
+        white_player = NNBot(board_size=board_size, model_file=model_files[1])
+        board = Board(board_size)
+        while 1:
+            if turn(black_player, white_player, Black):
+                break
+            if turn(white_player, black_player, White):
+                break
+        print('{} ({}) wins: {:,}    {} ({}) wins: {:,}    {:.2}'.format(
+            p1_model_file,
+            'Black' if black_player.model_file == p1_model_file else 'White',
+            wins[p1_model_file],
+            p2_model_file,
+            'Black' if black_player.model_file == p2_model_file else 'White',
+            wins[p2_model_file],
+            binom_test(wins[p1_model_file], sum(wins.values(), 0.5))))
+
+
 if __name__ == '__main__':
     import argparse
     ap = argparse.ArgumentParser()
-    ap.add_argument('command', choices=['gengames', 'train'])
+    ap.add_argument('command', choices=['gengames', 'train', 'trymodel'])
     ap.add_argument('--verbose', action='store_true')
+    ap.add_argument('--models', nargs=2)
     args = ap.parse_args()
     if args.command == 'gengames':
         gen_games(200, 9, args.verbose)
     elif args.command == 'train':
         train(9)
+    elif args.command == 'trymodel':
+        try_model(args.models[0], args.models[1], 9)
