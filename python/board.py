@@ -52,10 +52,15 @@ def ensure_point(p):
 class Board:
     def __init__(self, size=19):
         self._board = pygoban.Board(size)
+        self._cached_valid_moves = None
+
+    def __eq__(self, other):
+        return self._board == other._board
 
     def copy(self):
         b = Board.__new__(Board)
         b._board = self._board.copy()
+        b._cached_valid_moves = None
         return b
 
     @classmethod
@@ -78,15 +83,19 @@ class Board:
 
     def __setitem__(self, item, value):
         self._board[ensure_point(item)] = value.to_char()
+        self._cached_valid_moves = None
 
     def liberties(self, point):
         return self._board.liberties(ensure_point(point))
 
     def valid_moves(self, pos):
-        return self._board.valid_moves(pos.to_char())
+        if self._cached_valid_moves is None:
+            self._cached_valid_moves = self._board.valid_moves(pos.to_char())
+        return self._cached_valid_moves
 
     def play(self, point, pos):
         self._board.play(ensure_point(point), pos.to_char())
+        self._cached_valid_moves = None
 
     star_points = {
         19: {(3,  3), (3,  9), (3,  15),

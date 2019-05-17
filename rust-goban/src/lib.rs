@@ -457,3 +457,16 @@ fn multiple_stones_captured() {
     assert_eq!(b.position(P(0, 0)), Empty);
     assert_eq!(b.position(P(0, 1)), Empty);
 }
+
+#[test]
+fn board_equality() {
+    assert_eq!(Board::new(9), Board::new(9));
+    assert_ne!(Board::new(9), Board::new(19));
+    let mut b1 = Board::new(9);
+    let mut b2 = Board::new(9);
+    b1.set_position(P(0, 0), Black);
+    b2.set_position(P(0, 0), Black);
+    assert_eq!(b1, b2);
+    b2.set_position(P(0, 0), White);
+    assert_ne!(b1, b2);
+}

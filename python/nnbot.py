@@ -3,6 +3,7 @@ import itertools
 import os
 import random
 import string
+from time import time
 from tqdm import tqdm
 import numpy as np
 from scipy.stats import binom_test
@@ -60,7 +61,7 @@ class Node:
 class GameTree:
     def __init__(self, board, player):
         self.player = player
-        self.root = Node(board, {}, 0, -999.9)
+        self.root = Node(board.copy(), {}, 0, -999.9)
 
     @staticmethod
     def values(model, board, player):
@@ -75,12 +76,13 @@ class GameTree:
         move_values = [mv for mv in move_values if mv[0] in valid_moves]
         min_value = move_values[0][1]
         max_value = move_values[-1][1]
-        move_value_cutoff = min_value + ((max_value - min_value) * (9 / 10))
+        move_value_cutoff = min_value + ((max_value - min_value) * (2 / 3))
         for value, move in np.flip(move_values):
             if value < move_value_cutoff:
                 break
             b = node.board.copy()
             b.play(move, player)
+            assert move in valid_moves
             node.moves[move] = Node(b, {}, 0, 99.9 if player == self.player else -99.9)
 
     @staticmethod
@@ -93,25 +95,29 @@ class GameTree:
         else:
             return moves[np.argmin(move_values)][0]
 
-    def find_new_root(self, needle_node, haystack_root):
-        if needle_node == haystack_root:
-            return haystack_root
-        for haystack_next_root in haystack_root.moves.values():
-            new_root = self.find_new_root(needle_node, haystack_next_root)
+    def find_new_root(self, needle_board, haystack_tree_node):
+        if needle_board == haystack_tree_node.board:
+            return haystack_tree_node
+        for haystack_next_tree_node in haystack_tree_node.moves.values():
+            new_root = self.find_new_root(needle_board, haystack_next_tree_node)
             if new_root:
                 return new_root
 
-    def deepen(self, model, node=None, player=None, top=True):
+    def update_board(self, board):
+        new_root = self.find_new_root(board.copy(), self.root)
+        print(new_root)
+        assert new_root is not None
+        self.root = new_root
+
+    def deepen(self, model, node=None, player=None):
         node = node or self.root
         player = player or self.player
-        if top and node != self.root:
-            self.root = self.find_new_root(node, self.root) or Node(node.board, {}, 0, -999.9)
         node.visits += 1
         if not node.moves:
             self.init_good_moves(model, node, player)
             return
         move = self.select_weighted_random_move(node.moves, player == self.player)
-        self.deepen(model, node.moves[move], player.other, top=False)
+        self.deepen(model, node.moves[move], player.other)
         if player == self.player:
             node.value = min(n.value for n in node.moves.values())
         else:
@@ -128,8 +134,9 @@ class NNBot:
         self.explore = explore
         self.model = self.create_model()
         self.memory = []
+        self.game_trees = {}
 
-    def genmove(self, board, pos):
+    def intuit_move(self, board, pos):
         if self.board_size != board.size:
             raise ValueError(f'Expected board size {self.board_size}, got board size {board.size}')
         valid_moves = set(board.valid_moves(pos))
@@ -139,7 +146,7 @@ class NNBot:
         # TODO: Resign if low odds of winning.
         move_values = move_values.reshape(board.size, board.size)
         if self.explore and random.random() < 0.1:
-            move_values = np.random.dirichlet(move_values.reshape(1, board.size**2)[0] + 1)
+            move_values = move_values.reshape(board.size**2) + np.random.dirichlet(np.ones(board.size**2))
             move_values = move_values.reshape(board.size, board.size)
         move = None
         while move not in valid_moves:
@@ -148,6 +155,17 @@ class NNBot:
             move = P(*move)
         self.memory.append(MoveMemory(board.copy(), pos, move))
         return False, move
+
+    def genmove(self, board, pos):
+        if not board.valid_moves:
+            return True, None
+        if pos not in self.game_trees:
+            self.game_trees[pos] = GameTree(board, pos)
+        self.game_trees[pos].update_board(board)
+        start_time = time()
+        while time() - start_time < 2:
+            self.game_trees[pos].deepen(self.model)
+        return False, self.game_trees[pos].pick_move()
 
     def report_winner(self, winning_player, game_id=None):
         game_id = game_id or ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(8))
@@ -218,7 +236,8 @@ class NNBot:
         os.rename(f'{self.model_file}.new', self.model_file)
 
 
-def gen_games(n_games, board_size=19, verbose=True):
+def gen_games(n_games, board_size=19, verbose=True, intuit=False):
+    genmove_function = 'intuit_move' if intuit else 'genmove'
     player = NNBot(board_size=board_size)
     for game_number in range(1, n_games+1):
         if verbose:
@@ -226,22 +245,24 @@ def gen_games(n_games, board_size=19, verbose=True):
         board = Board(board_size)
         while 1:
             # Black's Move
-            resign, move = player.genmove(board, Black)
+            resign, move = getattr(player, genmove_function)(board, Black)
             if resign:
                 if verbose:
                     print('White Wins!')
                 player.report_winner(White)
                 break
+            assert move in board.valid_moves(Black)
             board.play(move, Black)
             if verbose:
                 print(board)
             # White's Move
-            resign, move = player.genmove(board, White)
+            resign, move = getattr(player, genmove_function)(board, White)
             if resign:
                 if verbose:
                     print('Black Wins!')
                 player.report_winner(Black)
                 break
+            assert move in board.valid_moves(White)
             board.play(move, White)
             if verbose:
                 print(board)
@@ -296,14 +317,17 @@ def try_model(p1_model_file, p2_model_file, board_size=19):
 
 if __name__ == '__main__':
     import argparse
-    ap = argparse.ArgumentParser()
-    ap.add_argument('command', choices=['gengames', 'train', 'trymodel'])
-    ap.add_argument('--verbose', action='store_true')
-    ap.add_argument('--models', nargs=2)
-    args = ap.parse_args()
-    if args.command == 'gengames':
-        gen_games(200, 9, args.verbose)
-    elif args.command == 'train':
-        train(9)
-    elif args.command == 'trymodel':
-        try_model(args.models[0], args.models[1], 9)
+    import ipdb
+    with ipdb.launch_ipdb_on_exception():
+        ap = argparse.ArgumentParser()
+        ap.add_argument('command', choices=['gengames', 'train', 'trymodel'])
+        ap.add_argument('--verbose', action='store_true')
+        ap.add_argument('--intuit', action='store_true')
+        ap.add_argument('--models', nargs=2)
+        args = ap.parse_args()
+        if args.command == 'gengames':
+            gen_games(200, 9, args.verbose, args.intuit)
+        elif args.command == 'train':
+            train(9)
+        elif args.command == 'trymodel':
+            try_model(args.models[0], args.models[1], 9)
