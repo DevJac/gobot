@@ -35,6 +35,14 @@ def encode_board(board, player):
     return t
 
 
+def board_point_to_np_index(go_board_point, board_size):
+    return np.ravel_multi_index((go_board_point.x, go_board_point.y), (board_size, board_size))
+
+
+def np_index_to_board_point(np_index, board_size):
+    return P(*np.unravel_index(np_index, (board_size, board_size)))
+
+
 class Node:
     def __init__(self, board, moves, visits, value):
         self.board = board
@@ -59,47 +67,58 @@ class GameTree:
         move_values, position_value = model.predict(np.array([encode_board(board, player)]))
         return move_values[0], position_value[0][0]
 
-    @staticmethod
-    def np_to_go(move, board_size):
-        return P(*np.unravel_index(move, (board_size, board_size)))
-
     def init_good_moves(self, model, node, player):
         move_values, position_value = self.values(model, node.board, player)
         node.value = position_value
-        move_value_cutoff = np.min(move_values) + ((np.max(move_values) - np.min(move_values)) * (2 / 3))
-        sorted_moves = np.argsort(move_values)
-        for move in np.flip(sorted_moves):
-            if move_values[move] < move_value_cutoff:
+        move_values = [(np_index_to_board_point(i, node.board.size), move_values[i]) for i in np.argsort(move_values)]
+        valid_moves = set(node.board.valid_moves(player))
+        move_values = [mv for mv in move_values if mv[0] in valid_moves]
+        min_value = move_values[0][1]
+        max_value = move_values[-1][1]
+        move_value_cutoff = min_value + ((max_value - min_value) * (9 / 10))
+        for value, move in np.flip(move_values):
+            if value < move_value_cutoff:
                 break
-            move = self.np_to_go(move, node.board.size)
             b = node.board.copy()
             b.play(move, player)
-            value = 99.9 if player == self.player else -99.9
-            node.moves[move] = Node(b, {}, 0, value)
+            node.moves[move] = Node(b, {}, 0, 99.9 if player == self.player else -99.9)
 
     @staticmethod
-    def select_weighted_random_move(moves):
-        moves = [(m, n.value) for m, n in moves.items()]
+    def select_weighted_random_move(moves, max):
+        moves = [(move, node.value) for move, node in moves.items()]
         move_values = np.array([m[1] for m in moves])
         move_values += np.random.dirichlet(np.ones(move_values.shape))
-        return moves[np.argmax(move_values)][0]
+        if max:
+            return moves[np.argmax(move_values)][0]
+        else:
+            return moves[np.argmin(move_values)][0]
 
-    def deepen(self, model, node=None, player=None):
+    def find_new_root(self, needle_node, haystack_root):
+        if needle_node == haystack_root:
+            return haystack_root
+        for haystack_next_root in haystack_root.moves.values():
+            new_root = self.find_new_root(needle_node, haystack_next_root)
+            if new_root:
+                return new_root
+
+    def deepen(self, model, node=None, player=None, top=True):
         node = node or self.root
         player = player or self.player
+        if top and node != self.root:
+            self.root = self.find_new_root(node, self.root) or Node(node.board, {}, 0, -999.9)
+        node.visits += 1
         if not node.moves:
             self.init_good_moves(model, node, player)
             return
-        node.visits += 1
-        move = self.select_weighted_random_move(node.moves)
-        self.deepen(model, node.moves[move], player.other)
+        move = self.select_weighted_random_move(node.moves, player == self.player)
+        self.deepen(model, node.moves[move], player.other, top=False)
         if player == self.player:
             node.value = min(n.value for n in node.moves.values())
         else:
-            node.value = min(n.value for n in node.moves.values())
+            node.value = max(n.value for n in node.moves.values())
 
     def pick_move(self):
-        return max(((m, self.root.moves[m].value) for m in self.root.moves), key=lambda i: i[1])[0]
+        return max(((m, self.root.moves[m].visits) for m in self.root.moves), key=lambda i: i[1])[0]
 
 
 class NNBot:
@@ -141,7 +160,7 @@ class NNBot:
             won = winning_player == player
             X.append(encode_board(board, player))
             y = np.zeros(board.size**2)
-            y[np.ravel_multi_index((move.x, move.y), (self.board_size, self.board_size))] = 1 if won else -1
+            y[board_point_to_np_index(move, self.board_size)] = 1 if won else -1
             Y.append([y, 1 if won else 0])
         X = np.array(X)
         Y0 = np.array([y[0] for y in Y])
