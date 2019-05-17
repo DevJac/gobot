@@ -111,7 +111,6 @@ class GameTree:
 
     def update_board(self, board):
         new_root = self.find_new_root(board.copy(), self.root)
-        print(new_root)
         if new_root is not None:
             self.root = new_root
         else:
@@ -124,6 +123,9 @@ class GameTree:
         if node.visits == 1:
             self.init_good_moves(model, node, player)
             return
+        if not node.moves:
+            node.value = 0.0
+            return
         move = self.select_weighted_random_move(node.moves, player == self.player)
         self.deepen(model, node.moves[move], player.other)
         if player == self.player:
@@ -132,6 +134,8 @@ class GameTree:
             node.value = max(n.value for n in node.moves.values())
 
     def pick_move(self):
+        if not self.root.moves:
+            return
         return max(((m, self.root.moves[m].visits) for m in self.root.moves), key=lambda i: i[1])[0]
 
 
@@ -171,9 +175,13 @@ class NNBot:
             self.game_trees[pos] = GameTree(board, pos)
         self.game_trees[pos].update_board(board)
         start_time = time()
-        while time() - start_time < 2:
+        while time() - start_time < 0.1:
             self.game_trees[pos].deepen(self.model)
-        return False, self.game_trees[pos].pick_move()
+        move = self.game_trees[pos].pick_move()
+        if not move:
+            return True, None
+        self.memory.append(MoveMemory(board.copy(), pos, move))
+        return False, move
 
     def report_winner(self, winning_player, game_id=None):
         game_id = game_id or ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(8))
@@ -212,7 +220,7 @@ class NNBot:
         self.model.compile(
             optimizer=SGD(lr=learning_rate),
             loss=['categorical_crossentropy', 'mse'],
-            loss_weights=[2, 1])
+            loss_weights=[1, 1])
         X = np.concatenate(X)
         Y0 = np.concatenate(Y0)
         Y1 = np.concatenate(Y1)
@@ -253,7 +261,7 @@ def gen_games(n_games, board_size=19, verbose=True, intuit=False):
         board = Board(board_size)
         while 1:
             if verbose:
-                print("Black's move:")
+                print("Game {:,}: Black's Move".format(game_number))
             resign, move = getattr(player, genmove_function)(board, Black)
             if resign:
                 if verbose:
@@ -265,7 +273,7 @@ def gen_games(n_games, board_size=19, verbose=True, intuit=False):
             if verbose:
                 print(board)
             if verbose:
-                print("White's move:")
+                print("Game {:,}: White's Move".format(game_number))
             resign, move = getattr(player, genmove_function)(board, White)
             if resign:
                 if verbose:
@@ -328,15 +336,23 @@ def try_model(p1_model_file, p2_model_file, board_size=19):
 if __name__ == '__main__':
     import argparse
     import ipdb
-    with ipdb.launch_ipdb_on_exception():
-        ap = argparse.ArgumentParser()
-        ap.add_argument('command', choices=['gengames', 'train', 'trymodel'])
-        ap.add_argument('--verbose', action='store_true')
-        ap.add_argument('--intuit', action='store_true')
-        ap.add_argument('--models', nargs=2)
-        args = ap.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument('command', choices=['gengames', 'train', 'trymodel'])
+    ap.add_argument('--verbose', action='store_true')
+    ap.add_argument('--intuit', action='store_true')
+    ap.add_argument('--models', nargs=2)
+    args = ap.parse_args()
+    if args.verbose:
+        with ipdb.launch_ipdb_on_exception():
+            if args.command == 'gengames':
+                gen_games(200, 9, args.verbose, args.intuit)
+            elif args.command == 'train':
+                train(9)
+            elif args.command == 'trymodel':
+                try_model(args.models[0], args.models[1], 9)
+    else:
         if args.command == 'gengames':
-            gen_games(200, 9, args.verbose, args.intuit)
+            gen_games(50, 9, args.verbose, args.intuit)
         elif args.command == 'train':
             train(9)
         elif args.command == 'trymodel':
