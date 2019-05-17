@@ -252,7 +252,8 @@ def gen_games(n_games, board_size=19, verbose=True, intuit=False):
             print('Game: {:,}'.format(game_number))
         board = Board(board_size)
         while 1:
-            print("Black's move:")
+            if verbose:
+                print("Black's move:")
             resign, move = getattr(player, genmove_function)(board, Black)
             if resign:
                 if verbose:
@@ -263,7 +264,8 @@ def gen_games(n_games, board_size=19, verbose=True, intuit=False):
             board.play(move, Black)
             if verbose:
                 print(board)
-            print("White's move:")
+            if verbose:
+                print("White's move:")
             resign, move = getattr(player, genmove_function)(board, White)
             if resign:
                 if verbose:
