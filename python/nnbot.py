@@ -14,6 +14,7 @@ from board import P, Black, White, Board
 
 
 MoveMemory = namedtuple('MoveMemory', 'board player move')
+Node = namedtuple('Node', 'board moves visits value')
 
 
 def encode_board(board, player):
@@ -33,6 +34,55 @@ def encode_board(board, player):
         t[9, r, c] = int(player == White)
         t[10, r, c] = int(p in valid_moves)
     return t
+
+
+class GameTree:
+    def __init__(self, board, player):
+        self.player = player
+        self.root = Node(board, {}, -999, 0)
+
+    @staticmethod
+    def values(model, board, player):
+        return model.predict(np.array([encode_board(board, player)]))
+
+    @staticmethod
+    def np_to_go(move, board_size):
+        return P(*np.unravel_index(move, (board_size, board_size)))
+
+    def init_good_moves(self, model, node, player):
+        move_values, position_value = self.values(model, node.board, player)
+        node.value = position_value
+        move_value_cutoff = np.min(move_values) + ((np.max(move_values) - np.min(move_values)) * (2 / 3))
+        sorted_moves = np.argsort(move_values)
+        for move in np.flip(sorted_moves):
+            if move_values[move] < move_value_cutoff:
+                break
+            move = self.np_to_go(move, node.board.size)
+            b = node.board.copy()
+            b.play(move, player)
+            value = 999 if player == self.player else -999
+            node.moves[move] = Node(b, {}, value, 0)
+
+    @staticmethod
+    def select_weighted_random_move(moves):
+        moves = [(m, n.value) for m, n in moves.items()]
+        move_values = np.array(moves[1])
+        move_values += np.random.dirichlet(np.ones(move_values.shape))
+        return moves[np.argmax(move_values)][0]
+
+    def deepen(self, model, node, player):
+        if not node.moves:
+            self.init_good_moves(model, node, player)
+        node.visits += 1
+        move = self.select_weighted_random_move(node.moves)
+        self.deepen(model, node.moves[move], player.other)
+        if player == self.player:
+            node.value = min(n.value for n in node.moves.values())
+        else:
+            node.value = min(n.value for n in node.moves.values())
+
+    def pick_move(self):
+        return max({m: m.visits for m in self.root.moves}, key=lambda i: i[1])[0]
 
 
 class NNBot:
@@ -74,7 +124,7 @@ class NNBot:
             won = winning_player == player
             X.append(encode_board(board, player))
             y = np.zeros(board.size**2)
-            y[np.ravel_multi_index((move.x, move.y), (self.board_size, self.board_size))] = 1 if won else -1
+            y[self.go_to_np(move)] = 1 if won else -1
             Y.append([y, 1 if won else 0])
         X = np.array(X)
         Y0 = np.array([y[0] for y in Y])
