@@ -14,7 +14,6 @@ from board import P, Black, White, Board
 
 
 MoveMemory = namedtuple('MoveMemory', 'board player move')
-Node = namedtuple('Node', 'board moves visits value')
 
 
 def encode_board(board, player):
@@ -36,14 +35,29 @@ def encode_board(board, player):
     return t
 
 
+class Node:
+    def __init__(self, board, moves, visits, value):
+        self.board = board
+        self.moves = moves
+        self.visits = visits
+        self.value = value
+
+    def __repr__(self):
+        return '<Board: {:,} {:,} {:.3}>'.format(
+            len(self.moves),
+            self.visits,
+            self.value)
+
+
 class GameTree:
     def __init__(self, board, player):
         self.player = player
-        self.root = Node(board, {}, -999, 0)
+        self.root = Node(board, {}, 0, -999.9)
 
     @staticmethod
     def values(model, board, player):
-        return model.predict(np.array([encode_board(board, player)]))
+        move_values, position_value = model.predict(np.array([encode_board(board, player)]))
+        return move_values[0], position_value[0][0]
 
     @staticmethod
     def np_to_go(move, board_size):
@@ -60,19 +74,22 @@ class GameTree:
             move = self.np_to_go(move, node.board.size)
             b = node.board.copy()
             b.play(move, player)
-            value = 999 if player == self.player else -999
-            node.moves[move] = Node(b, {}, value, 0)
+            value = 99.9 if player == self.player else -99.9
+            node.moves[move] = Node(b, {}, 0, value)
 
     @staticmethod
     def select_weighted_random_move(moves):
         moves = [(m, n.value) for m, n in moves.items()]
-        move_values = np.array(moves[1])
+        move_values = np.array([m[1] for m in moves])
         move_values += np.random.dirichlet(np.ones(move_values.shape))
         return moves[np.argmax(move_values)][0]
 
-    def deepen(self, model, node, player):
+    def deepen(self, model, node=None, player=None):
+        node = node or self.root
+        player = player or self.player
         if not node.moves:
             self.init_good_moves(model, node, player)
+            return
         node.visits += 1
         move = self.select_weighted_random_move(node.moves)
         self.deepen(model, node.moves[move], player.other)
@@ -82,7 +99,7 @@ class GameTree:
             node.value = min(n.value for n in node.moves.values())
 
     def pick_move(self):
-        return max({m: m.visits for m in self.root.moves}, key=lambda i: i[1])[0]
+        return max(((m, self.root.moves[m].value) for m in self.root.moves), key=lambda i: i[1])[0]
 
 
 class NNBot:
@@ -124,7 +141,7 @@ class NNBot:
             won = winning_player == player
             X.append(encode_board(board, player))
             y = np.zeros(board.size**2)
-            y[self.go_to_np(move)] = 1 if won else -1
+            y[np.ravel_multi_index((move.x, move.y), (self.board_size, self.board_size))] = 1 if won else -1
             Y.append([y, 1 if won else 0])
         X = np.array(X)
         Y0 = np.array([y[0] for y in Y])
